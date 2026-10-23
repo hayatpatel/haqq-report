@@ -1,0 +1,6 @@
+name = "haqq-report-bot"
+main = "index.js"
+compatibility_date = "2026-10-01"
+
+# Secrets are set with `npx wrangler secret put <NAME>`, never stored here:
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_OWNER_ID, TELEGRAM_WEBHOOK_SECRET, SUPABASE_URL, SUPABASE_KEY

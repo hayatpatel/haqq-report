@@ -1,0 +1,42 @@
+# --- Secrets: never commit ---
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+# The raw Meta credential dump used during initial setup
+*Meta Setup*Posting API Configuration*.txt
+*Posting API Configuration*.txt
+*credentials*.txt
+*tokens*.txt
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# --- Runtime state (lives in Supabase in production) ---
+data/runtime_state.json
+data/cache/
+data/out/
+
+# --- Generated site output ---
+site/public/
+
+# --- Cloudflare Worker ---
+worker/node_modules/
+worker/.wrangler/
+worker/.dev.vars
+
+# --- OS / editor ---
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,84 @@
+{
+  "brand": {
+    "name": "Haqq Report",
+    "handle": "haqqreport",
+    "tagline": "Facts first. Sources named. Corrections public."
+  },
+
+  "mode": "review",
+  "mode_notes": "review = every draft goes to Telegram for approval (first 4 weeks). auto = Green and Amber post automatically, Red always needs approval.",
+
+  "enable": {
+    "facebook": false,
+    "instagram": false,
+    "threads": false,
+    "bluesky": false,
+    "telegram_channel": false,
+    "website": false
+  },
+
+  "limits": {
+    "MAX_POSTS_PER_DAY": 10,
+    "MAX_RED_PER_DAY": 4,
+    "MIN_PALESTINE_PER_DAY": 2,
+    "VERIFY_MIN_TIER": "C",
+    "BREAKING_CHECK_MINUTES": 15,
+    "GAP_HOURS": 3,
+    "INGEST_MAX_AGE_HOURS": 48,
+    "PLATFORM_FAILURES_BEFORE_PAUSE": 3
+  },
+
+  "scoring": {
+    "weights": { "significance": 0.35, "impact": 0.30, "interest": 0.35 },
+    "gap_bonus": 0.8,
+    "watch_topic_bonus": 0.5,
+    "gap_major_wires_max": 2
+  },
+
+  "watch_topics": [
+    "palestine", "gaza", "west bank", "jerusalem",
+    "sudan", "yemen", "syria", "lebanon", "afghanistan",
+    "somalia", "rohingya", "kashmir", "xinjiang", "libya",
+    "islamophobia"
+  ],
+
+  "designated_group_keywords": [
+    "hamas", "hezbollah", "islamic state", "isis", "al-qaeda", "al qaeda"
+  ],
+
+  "meta": {
+    "graph_version": "v21.0",
+    "graph_version_note": "Use the Graph API version shown in the Meta dashboard if newer.",
+    "threads_api_version": "v1.0",
+    "threads_publish_wait_seconds": 30,
+    "token_refresh_after_days": 40,
+    "token_alert_days_before_expiry": 10,
+    "token_lifetime_days": 60
+  },
+
+  "ai": {
+    "provider_order": ["groq", "gemini"],
+    "groq_model": "llama-3.3-70b-versatile",
+    "gemini_model": "gemini-2.0-flash",
+    "model_note": "Free-tier model names change. Confirm in each provider's console."
+  },
+
+  "election_silence": {
+    "note": "Dates (YYYY-MM-DD) on which political content for a given country must not be published. Telegram reminder 14 days before.",
+    "reminder_days_before": 14,
+    "blackouts": []
+  },
+
+  "schedule_ist": {
+    "publish_slots": ["06:30", "13:00", "20:00", "00:30"],
+    "palestine_brief": "20:30",
+    "calendar_job": "05:00",
+    "weekly_report": "Mon 08:45",
+    "health": "18:10"
+  },
+
+  "site": {
+    "base_url": "",
+    "base_url_note": "Set once the website is deployed (Cloudflare Pages or GitHub Pages)."
+  }
+}

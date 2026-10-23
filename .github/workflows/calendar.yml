@@ -1,0 +1,25 @@
+name: calendar
+
+# Daily 05:00 IST = 23:30 UTC (previous day). Islamic occasions and election-silence reminders.
+# Does nothing until the repository variable BOT_ENABLED is set to "true".
+on:
+  schedule:
+    - cron: "30 23 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  calendar:
+    if: ${{ vars.BOT_ENABLED == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m newsbot calendar

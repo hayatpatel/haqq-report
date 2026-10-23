@@ -1,0 +1,9 @@
+[project]
+name = "haqq-report"
+version = "0.1.0"
+description = "Haqq Report: an independent, automated news desk with named attribution and public corrections."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

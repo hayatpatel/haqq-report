@@ -1,0 +1,28 @@
+name: keepalive
+
+# 1st and 15th of each month: the free Supabase project pauses if idle, so this pings it.
+# NOTE: GitHub also disables scheduled workflows after 60 days without repository activity (commits).
+# A ping cannot prevent that; keep committing, or re-enable schedules in the Actions tab if it happens.
+on:
+  schedule:
+    - cron: "17 3 1,15 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keepalive:
+    if: ${{ vars.BOT_ENABLED == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then echo "Supabase not configured yet"; exit 0; fi
+          curl -fsS -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $SUPABASE_KEY" \
+            "$SUPABASE_URL/rest/v1/settings?select=key&limit=1" > /dev/null
+          echo "Supabase reachable"
