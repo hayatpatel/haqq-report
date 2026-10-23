@@ -1,6 +1,6 @@
 name: db-check
 
-# Manual Supabase connection test: URL, key and all 11 tables. Result goes to your Telegram.
+# Manual Supabase connection test: URL, key and all 12 tables. Result goes to your Telegram.
 on:
   workflow_dispatch:
 

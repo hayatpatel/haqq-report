@@ -190,6 +190,26 @@ No public channel is needed. The bot sends everything to your own private chat w
 The feed never raises: if Telegram is down or unconfigured, publishing carries on. Weekly insights and a
 per-post log in the database are still on the roadmap.
 
+## Running the project (dry run)
+
+`python -m newsbot run` (workflow **run (fetch, store, draft)**, hourly once `BOT_ENABLED=true`, or *Run workflow*
+by hand) does a full cycle: fetch feeds, skip stories already stored, save articles, extract and verify claims,
+draft with the AI, run the safety checks, save claims and drafts, and send each draft to your Telegram **for review**.
+**Nothing is published.** Review mode, the disabled platform flags and a dry-run publisher all stop that, and
+real posting stays off until the approval Worker and the visual cards exist.
+
+Every run also leaves a detailed record:
+
+| Where | What |
+|---|---|
+| `logs/<name>-<time>.log` | Full DEBUG log with every secret value removed. Uploaded as a downloadable **Actions artifact** (14 days) |
+| Supabase `run_logs` | Status, summary counts and the log text (last 200 KB) |
+| Telegram | The log file itself, sent to your private chat (`owner_feed.log_file`: `always`, `on_error` or `never`) |
+
+Articles, claims and drafts are stored in the `articles`, `claims` and `drafts` tables. The `run_logs` table and
+`articles.source_name` column come from `db/migrations/002_run_logs.sql` (also in `db/schema.sql`); run it once
+in the Supabase SQL editor if you applied the schema before.
+
 ## Launch checklist
 
 1. Merge the open pull requests, then add every secret (see Secrets) and the variable `BOT_ENABLED=false`.

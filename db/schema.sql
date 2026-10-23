@@ -37,6 +37,7 @@ create table if not exists articles (
   summary      text,
   source_id    bigint references sources(id),
   tier         text,
+  source_name  text,
   language     text default 'en',
   translated   boolean default false,
   published_at timestamptz,
@@ -116,6 +117,17 @@ create table if not exists settings (
 insert into settings (key, value) values ('paused', 'false'), ('mode', 'review')
   on conflict (key) do nothing;
 
+create table if not exists run_logs (
+  id          bigint generated always as identity primary key,
+  name        text not null,
+  started_at  timestamptz not null,
+  finished_at timestamptz,
+  status      text not null,
+  summary     jsonb default '{}'::jsonb,
+  log_text    text,
+  created_at  timestamptz default now()
+);
+
 alter table sources     enable row level security;
 alter table creators    enable row level security;
 alter table articles    enable row level security;
@@ -127,6 +139,7 @@ alter table corrections enable row level security;
 alter table occasions   enable row level security;
 alter table tokens      enable row level security;
 alter table settings    enable row level security;
+alter table run_logs    enable row level security;
 
 -- ---------------------------------------------------------------------------------------
 -- Supabase no longer opens new public tables to the Data API automatically.

@@ -39,7 +39,7 @@ def test_db_check_reports_each_table(monkeypatch, capsys):
     monkeypatch.setattr(store.requests, "get", fake_get)
     assert cli.main(["db-check"]) == 1
     out = capsys.readouterr().out
-    assert "tokens: FAILED HTTP 401" in out and "sources: ok" in out and "1 of 11" in out and sent
+    assert "tokens: FAILED HTTP 401" in out and "sources: ok" in out and "1 of 12" in out and sent
 
 
 def test_db_check_all_ok(monkeypatch, capsys):

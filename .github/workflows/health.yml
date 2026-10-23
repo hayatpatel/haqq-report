@@ -38,6 +38,15 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python -m newsbot health
 
+      - name: Upload run log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-log-${{ github.workflow }}-${{ github.run_id }}
+          path: logs/
+          retention-days: 14
+          if-no-files-found: ignore
+
       - name: Tell the owner on Telegram if this run failed
         if: ${{ failure() }}
         env:

@@ -8,11 +8,19 @@
   "mode": "review",
   "mode_notes": "review = every draft goes to Telegram for approval (first 4 weeks). auto = Green and Amber post automatically, Red always needs approval.",
 
+  "run": {
+    "max_articles": 8,
+    "max_telegram_drafts": 5,
+    "dedupe_days": 7
+  },
+
   "owner_feed": {
     "note": "Private Telegram messages to the owner (TELEGRAM_OWNER_ID). No public channel needed.",
     "posts": true,
     "errors": true,
-    "daily_health_report": true
+    "daily_health_report": true,
+    "log_file": "always",
+    "log_file_note": "Send each run's log file to Telegram: always | on_error | never"
   },
 
   "enable": {

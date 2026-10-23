@@ -80,7 +80,40 @@ def cmd_corrections(_args) -> int:
     return 0
 
 
+def _store_or_none():
+    try:
+        from .store import Store
+        return Store()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def cmd_run(args) -> int:
+    """Full dry run: fetch, store, draft, review. Publishes nothing. Log goes to file, Supabase and Telegram."""
+    from . import runner
+    from .runlog import RunLog
+
+    store = _store_or_none()
+    with RunLog("run-priority" if args.priority else "run", store) as rl:
+        if store is None:
+            rl.fail("Supabase not configured: nothing will be stored")
+        rl.summary.update(runner.run(priority=args.priority, store=store))
+        if rl.summary.get("ai_error"):
+            rl.fail("AI providers unavailable")
+    return 0 if rl.status == "ok" else 1
+
+
 def cmd_health(_args) -> int:
+    from .runlog import RunLog
+
+    with RunLog("health", _store_or_none()) as rl:
+        code = _cmd_health()
+        if code:
+            rl.status = "error"
+    return code
+
+
+def _cmd_health() -> int:
     store = None
     try:
         from .store import Store
@@ -230,6 +263,9 @@ def cmd_notify(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="newsbot", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
+    p = sub.add_parser("run", help="full dry run: fetch, store, draft, review (publishes nothing)")
+    p.add_argument("--priority", action="store_true")
+    p.set_defaults(fn=cmd_run)
     sub.add_parser("check-config").set_defaults(fn=cmd_check_config)
     p = sub.add_parser("ingest")
     p.add_argument("--priority", action="store_true")
