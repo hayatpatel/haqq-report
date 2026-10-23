@@ -146,7 +146,7 @@ def send_log(path: Path, caption: str = "") -> bool:
 
 _LABELS = {"fetched": "Fetched", "new": "New", "stored": "Stored", "published": "Posted", "needs_approval": "Awaiting you",
            "publish_failed": "Failed", "skipped": "Skipped", "held": "Held", "duplicate": "Duplicates",
-           "retried": "Retried", "cleaned": "Cleaned from DB", "over_daily_limit": "Over daily limit",
+           "retried": "Retried", "queued": "Queued for next run", "cleaned": "Cleaned from DB", "over_daily_limit": "Over daily limit",
            "handled": "Taps handled", "errors": "Errors"}
 
 

@@ -124,3 +124,13 @@ def test_second_job_cannot_claim_a_draft_already_being_posted(monkeypatch):
     stats = {}
     runner.publish_ready(st, 7, Draft(headline="H", body="b"), CFG, stats)
     assert stats["already_claimed"] == 1
+
+
+def test_per_run_post_cap_queues_the_rest(monkeypatch):
+    from newsbot import runner
+    from newsbot.models import Draft
+
+    monkeypatch.setattr(pipeline, "publish_draft", lambda *a, **k: pytest.fail("over the per-run cap"))
+    st, stats = Store(), {"published": 2}
+    runner.publish_ready(st, 7, Draft(headline="H", body="b"), {**CFG, "run": {"max_posts_per_run": 2}}, stats)
+    assert stats["queued"] == 1 and st.draft["status"] == "pending"

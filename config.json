@@ -7,11 +7,12 @@
   "mode": "auto",
   "mode_notes": "review = every draft goes to Telegram for approval (first 4 weeks). auto = Green and Amber post automatically, Red always needs approval.",
   "run": {
-    "max_articles": 8,
+    "max_articles": 6,
     "max_telegram_drafts": 5,
     "max_per_source": 3,
     "off_mission_max": 2,
-    "dedupe_days": 3
+    "dedupe_days": 3,
+    "max_posts_per_run": 2
   },
   "owner_feed": {
     "note": "Private Telegram messages to the owner (TELEGRAM_OWNER_ID). No public channel needed.",

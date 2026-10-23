@@ -90,6 +90,9 @@ def publish_ready(store, draft_id, draft, cfg: dict, stats: dict, final: bool = 
         if approvals._posted_today(store) >= cfg["limits"]["MAX_POSTS_PER_DAY"]:
             stats["over_daily_limit"] = stats.get("over_daily_limit", 0) + 1
             return
+        if stats.get("published", 0) >= cfg.get("run", {}).get("max_posts_per_run", 99):
+            stats["queued"] = stats.get("queued", 0) + 1  # stays pending; posted by a later run, within 48h
+            return
         now = datetime.now(timezone.utc).isoformat()
         if not store.claim("drafts", draft_id, "pending", "approved", {"decided_at": now}):
             stats["already_claimed"] = stats.get("already_claimed", 0) + 1  # another job is posting it: never twice

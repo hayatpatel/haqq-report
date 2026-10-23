@@ -6,8 +6,9 @@ name: breaking
 # (public repos have unlimited minutes, but then it must hold no secrets; it does not).
 # Does nothing until the repository variable BOT_ENABLED is set to "true".
 on:
-  schedule:
-    - cron: "*/15 * * * *"
+  # Schedule switched off for now (the main run does 6 times a day). To bring it back, add:
+  #   schedule:
+  #     - cron: "*/30 * * * *"
   workflow_dispatch:
 
 permissions:

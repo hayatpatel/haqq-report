@@ -1,10 +1,11 @@
 name: run (fetch, store, draft)
 
-# Hourly ingest. Palestine and priority feeds get their own faster job (breaking.yml).
+# Runs 6 times a day (every 4 hours, UTC 00:05, 04:05, 08:05, 12:05, 16:05, 20:05 = IST 05:35, 09:35, 13:35, 17:35, 21:35, 01:35).
+# To change the times, edit the cron line. The faster priority job (breaking.yml) is switched off for now.
 # Does nothing until the repository variable BOT_ENABLED is set to "true".
 on:
   schedule:
-    - cron: "5 * * * *"
+    - cron: "5 */4 * * *"
   workflow_dispatch:
 
 permissions:
