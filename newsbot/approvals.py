@@ -122,16 +122,19 @@ def handle_message(store, msg: dict) -> str:
     return "ignored: not a command"
 
 
-def poll(store, cfg: dict | None = None) -> dict:
+def poll(store, cfg: dict | None = None, wait: int = 0, first: bool = True) -> dict:
+    """One check of Telegram. wait>0 holds the request open up to that many seconds (instant replies)."""
     cfg = cfg or load_config()
     stats = {"updates": 0, "handled": 0, "errors": 0, "results": []}
-    try:
-        _call("deleteWebhook", {"drop_pending_updates": "false"})  # getUpdates fails while a webhook is set
-    except Exception:  # noqa: BLE001
-        log.warning("deleteWebhook failed")
+    if first:
+        try:
+            _call("deleteWebhook", {"drop_pending_updates": "false"})  # getUpdates fails while a webhook is set
+        except Exception:  # noqa: BLE001
+            log.warning("deleteWebhook failed")
     rows = store.select_raw("settings", {"key": "eq.telegram_offset"})
     offset = int(rows[0]["value"]) if rows else 0
-    updates = _call("getUpdates", {"offset": offset, "timeout": 0, "allowed_updates": '["callback_query","message"]'})
+    updates = _call("getUpdates", {"offset": offset, "timeout": wait, "allowed_updates": '["callback_query","message"]'},
+                    timeout=wait + 15)
     stats["updates"] = len(updates)
     for u in updates:
         offset = max(offset, u["update_id"] + 1)
@@ -153,5 +156,36 @@ def poll(store, cfg: dict | None = None) -> dict:
             stats["errors"] += 1
             log.exception("callback failed (%s)", type(exc).__name__)
             _answer(cb["id"], "Error. Check the log.")
-    store.upsert("settings", {"key": "telegram_offset", "value": str(offset)}, "key")
+    if updates:
+        store.upsert("settings", {"key": "telegram_offset", "value": str(offset)}, "key")
     return stats
+
+
+def listen(store, minutes: float, *, wait: int = 25, cfg: dict | None = None,
+           sleep=None, clock=None) -> dict:
+    """Stay on Telegram for `minutes`, answering commands within seconds. Survives temporary errors."""
+    import time
+
+    sleep, clock = sleep or time.sleep, clock or time.monotonic
+    cfg = cfg or load_config()
+    end = clock() + minutes * 60
+    totals = {"polls": 0, "handled": 0, "errors": 0, "results": []}
+    first, bad_in_a_row = True, 0
+    while clock() < end:
+        try:
+            stats = poll(store, cfg, wait=wait, first=first)
+            first, bad_in_a_row = False, 0
+            totals["handled"] += stats["handled"]
+            totals["errors"] += stats["errors"]
+            totals["results"] += stats["results"]
+        except Exception as exc:  # noqa: BLE001 - Telegram or the database hiccuped: wait and carry on
+            bad_in_a_row += 1
+            totals["errors"] += 1
+            log.warning("telegram check failed (%s), attempt %d", type(exc).__name__, bad_in_a_row)
+            if bad_in_a_row >= 20:
+                raise
+            sleep(min(60, 5 * bad_in_a_row))
+        totals["polls"] += 1
+        if wait == 0:
+            sleep(5)
+    return totals

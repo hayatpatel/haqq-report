@@ -101,12 +101,6 @@ def cmd_run(args) -> int:
     with RunLog("run-priority" if args.priority else "run", store) as rl:
         if store is None:
             rl.fail("Supabase not configured: nothing will be stored")
-        if store is not None:  # also read your Telegram commands (/fbtoken); the 5-minute workflow can be skipped by GitHub
-            try:
-                from . import approvals
-                rl.summary["handled"] = approvals.poll(store)["handled"]
-            except Exception as exc:  # noqa: BLE001
-                logging.getLogger("haqq.cli").warning("telegram commands not read (%s)", type(exc).__name__)
         rl.summary.update(runner.run(priority=args.priority, store=store))
         if rl.summary.get("ai_error"):
             rl.fail("AI providers unavailable")
@@ -179,6 +173,24 @@ def cmd_cleanup(_args) -> int:
             rl.fail("Supabase not configured")
         else:
             rl.summary["cleaned"] = sum(cleanup.run(store, load_config()).values())
+    return 0 if rl.status == "ok" else 1
+
+
+def cmd_listen(args) -> int:
+    """Listen to Telegram for the given minutes (long polling). Commands such as /fbtoken are answered in seconds."""
+    from . import approvals
+    from .runlog import RunLog
+
+    store = _store_or_none()
+    with RunLog("listen", store) as rl:
+        if store is None:
+            rl.fail("Supabase not configured: cannot read commands")
+            return 1
+        totals = approvals.listen(store, args.minutes)
+        for line in totals["results"]:
+            logging.getLogger("haqq.cli").info("telegram: %s", line)
+        rl.summary.update({"handled": totals["handled"], "errors": totals["errors"]})
+        rl.idle = totals["handled"] == 0 and totals["errors"] == 0
     return 0 if rl.status == "ok" else 1
 
 
@@ -390,6 +402,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("corrections").set_defaults(fn=cmd_corrections)
     sub.add_parser("health").set_defaults(fn=cmd_health)
     sub.add_parser("approvals").set_defaults(fn=cmd_approvals)
+    p = sub.add_parser("listen")
+    p.add_argument("--minutes", type=float, default=230)
+    p.set_defaults(fn=cmd_listen)
     sub.add_parser("cleanup").set_defaults(fn=cmd_cleanup)
     sub.add_parser("card-test").set_defaults(fn=cmd_card_test)
     p = sub.add_parser("test-post")

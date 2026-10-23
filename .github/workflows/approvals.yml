@@ -1,10 +1,7 @@
 name: approvals (post what you approve)
 
-# Every 5 minutes: reads your Approve/Reject taps in Telegram and posts approved drafts.
-# Does nothing until the repository variable BOT_ENABLED is set to "true".
+# Manual one-off check of your Telegram commands. The always-on listener (listen.yml) normally does this.
 on:
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:

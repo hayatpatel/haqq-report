@@ -1,0 +1,62 @@
+name: listen (Telegram commands)
+
+# Stays connected to Telegram so your commands (/fbtoken, /tokenstatus) are answered within seconds.
+# A new listener starts every 3 hours and replaces the old one, so a skipped GitHub schedule never leaves a gap.
+# The full pipeline (ingest.yml) runs separately every 4 hours.
+# Does nothing until the repository variable BOT_ENABLED is set to "true".
+on:
+  schedule:
+    - cron: "50 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telegram-listener
+  cancel-in-progress: true
+
+jobs:
+  listen:
+    if: ${{ vars.BOT_ENABLED == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 235
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Listen for 3 hours 50 minutes
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OWNER_ID: ${{ secrets.TELEGRAM_OWNER_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          FB_APP_ID: ${{ secrets.FB_APP_ID }}
+          FB_APP_SECRET: ${{ secrets.FB_APP_SECRET }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_TOKEN: ${{ secrets.IG_TOKEN }}
+          TH_USER_ID: ${{ secrets.TH_USER_ID }}
+          TH_TOKEN: ${{ secrets.TH_TOKEN }}
+        run: python -m newsbot listen --minutes 230
+
+      - name: Upload run log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: listen-log-${{ github.run_id }}
+          path: logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Tell the owner on Telegram if the listener failed
+        if: ${{ failure() }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OWNER_ID: ${{ secrets.TELEGRAM_OWNER_ID }}
+        run: |
+          python -m newsbot notify "ERROR: the Telegram listener stopped. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

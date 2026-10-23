@@ -134,3 +134,34 @@ def test_per_run_post_cap_queues_the_rest(monkeypatch):
     st, stats = Store(), {"published": 2}
     runner.publish_ready(st, 7, Draft(headline="H", body="b"), {**CFG, "run": {"max_posts_per_run": 2}}, stats)
     assert stats["queued"] == 1 and st.draft["status"] == "pending"
+
+
+def test_listen_keeps_polling_until_the_time_is_up_and_survives_errors(monkeypatch):
+    clock = {"t": 0.0}
+    calls = []
+
+    def fake_poll(store, cfg, wait=0, first=True):
+        calls.append(first)
+        clock["t"] += 25
+        if len(calls) == 2:
+            raise RuntimeError("telegram hiccup")
+        return {"handled": 1, "errors": 0, "results": ["fbtoken: saved"]}
+
+    monkeypatch.setattr(approvals, "poll", fake_poll)
+    out = approvals.listen(Store(), 2, cfg=CFG, sleep=lambda s: None, clock=lambda: clock["t"])
+    assert out["polls"] == len(calls) >= 3 and out["handled"] == len(calls) - 1 and out["errors"] == 1
+    assert calls[0] is True and set(calls[1:]) == {False}
+
+
+def test_poll_only_saves_the_offset_when_something_arrived(monkeypatch):
+    class S(Store):
+        def __init__(self):
+            super().__init__(); self.up = []
+        def select_raw(self, table, params):
+            return []
+        def upsert(self, *a, **k):
+            self.up.append(a)
+    st = S()
+    monkeypatch.setattr(approvals, "_call", lambda m, d, timeout=30: [])
+    approvals.poll(st, CFG, wait=25)
+    assert st.up == []

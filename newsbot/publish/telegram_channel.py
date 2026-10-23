@@ -14,8 +14,8 @@ def _api(method: str) -> str:
     return f"https://api.telegram.org/bot{token}/{method}"
 
 
-def _call(method: str, data: dict) -> dict:
-    out = graph_request("POST", _api(method), data=data)
+def _call(method: str, data: dict, timeout: int = 30) -> dict:
+    out = graph_request("POST", _api(method), data=data, timeout=timeout)
     if not out.get("ok", False):
         raise PublishError(f"telegram {method} failed")
     return out["result"]
