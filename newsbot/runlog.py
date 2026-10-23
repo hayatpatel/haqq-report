@@ -34,6 +34,7 @@ class RunLog:
         self.path = self.dir / f"{name}-{self.started.strftime('%Y%m%dT%H%M%SZ')}.log"
         self.summary: dict = {}
         self.status = "ok"
+        self.idle = False  # nothing happened (e.g. no taps): do not store or send this log
         self._handlers: list[logging.Handler] = []
         self._old_level = log.level
 
@@ -67,6 +68,8 @@ class RunLog:
         try:
             text = self.path.read_text(encoding="utf-8")
         except OSError:
+            return
+        if self.idle and self.status == "ok":
             return
         if self.store is not None:
             try:

@@ -1,0 +1,56 @@
+name: approvals (post what you approve)
+
+# Every 5 minutes: reads your Approve/Reject taps in Telegram and posts approved drafts.
+# Does nothing until the repository variable BOT_ENABLED is set to "true".
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: approvals
+  cancel-in-progress: false
+
+jobs:
+  approvals:
+    if: ${{ vars.BOT_ENABLED == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Handle approvals
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OWNER_ID: ${{ secrets.TELEGRAM_OWNER_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          TH_USER_ID: ${{ secrets.TH_USER_ID }}
+          TH_TOKEN: ${{ secrets.TH_TOKEN }}
+        run: python -m newsbot approvals
+
+      - name: Upload run log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: approvals-log-${{ github.run_id }}
+          path: logs/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Tell the owner on Telegram if this run failed
+        if: ${{ failure() }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OWNER_ID: ${{ secrets.TELEGRAM_OWNER_ID }}
+        run: |
+          python -m newsbot notify "ERROR: workflow 'approvals' failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

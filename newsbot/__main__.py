@@ -10,6 +10,7 @@ Commands
 from __future__ import annotations
 
 import argparse
+import logging
 import json
 import os
 import sys
@@ -100,6 +101,26 @@ def cmd_run(args) -> int:
         rl.summary.update(runner.run(priority=args.priority, store=store))
         if rl.summary.get("ai_error"):
             rl.fail("AI providers unavailable")
+    return 0 if rl.status == "ok" else 1
+
+
+def cmd_approvals(_args) -> int:
+    """Handle Approve/Reject taps from Telegram. Publishes approved drafts live."""
+    from . import approvals
+    from .runlog import RunLog
+
+    store = _store_or_none()
+    with RunLog("approvals", store) as rl:
+        if store is None:
+            rl.fail("Supabase not configured: cannot read drafts")
+        else:
+            stats = approvals.poll(store)
+            rl.summary.update({k: v for k, v in stats.items() if k != "results"})
+            for line in stats["results"]:
+                logging.getLogger("haqq.cli").info("approvals: %s", line)
+            rl.idle = stats["handled"] == 0
+            if stats["errors"]:
+                rl.fail(f"{stats['errors']} approval(s) failed")
     return 0 if rl.status == "ok" else 1
 
 
@@ -310,6 +331,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("calendar").set_defaults(fn=cmd_calendar)
     sub.add_parser("corrections").set_defaults(fn=cmd_corrections)
     sub.add_parser("health").set_defaults(fn=cmd_health)
+    sub.add_parser("approvals").set_defaults(fn=cmd_approvals)
     p = sub.add_parser("test-post")
     p.add_argument("platform", choices=["facebook", "instagram", "threads", "all"])
     p.add_argument("--live", action="store_true", help="really publish (default is a dry run)")

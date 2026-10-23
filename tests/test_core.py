@@ -12,10 +12,10 @@ def art(url="https://e.com/a", title="UN OCHA reports aid", summary="UN OCHA sai
 
 
 # --- config ---------------------------------------------------------------------------------
-def test_config_loads_and_everything_starts_disabled():
+def test_config_loads_in_review_mode_with_only_text_platforms_on():
     cfg = config.load_config()
-    assert cfg["mode"] == "review"
-    assert not any(cfg["enable"].values())
+    assert cfg["mode"] == "review"  # every post needs a human tap
+    assert {k for k, v in cfg["enable"].items() if v} == {"facebook", "threads"}  # instagram needs image cards
     assert cfg["limits"]["MAX_POSTS_PER_DAY"] == 10
 
 
@@ -136,8 +136,9 @@ def test_dry_run_publishes_nothing_and_needs_no_credentials():
 
 
 def test_disabled_platforms_are_not_touched():
-    out = pipeline.process_article(art(), make_ai(CLEAN), {**config.load_config(), "mode": "auto"})
-    assert pipeline.publish_draft(out.draft, "https://x/y.jpg", dry_run=False, cfg=config.load_config()) == []
+    cfg = {**config.load_config(), "enable": {k: False for k in config.load_config()["enable"]}}
+    out = pipeline.process_article(art(), make_ai(CLEAN), {**cfg, "mode": "auto"})
+    assert pipeline.publish_draft(out.draft, "https://x/y.jpg", dry_run=False, cfg=cfg) == []
 
 
 # --- corrections / site / calendar / factcheck -----------------------------------------------

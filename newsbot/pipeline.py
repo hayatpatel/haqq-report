@@ -27,7 +27,7 @@ Rules:
 - Never say genocide, ethnic cleansing or war crime in your own voice; quote the named body that said it.
 - No casualty figure without its named source in the same sentence.
 - No collective blame, no inflammatory language, no praise of any armed group.
-- At most 2 emoji. Max 600 characters. First line is a plain headline.
+- No emoji. Max 600 characters. First line is a plain headline.
 - Use only facts and numbers present in the text below.
 
 SOURCE: {source}
@@ -52,8 +52,7 @@ def make_draft(article: Article, claims: list, label: str, ai_call: Callable[[st
     headline, _, body = raw.partition("\n")
     headline = safety.clean_headline(headline)
     body = body.strip() or headline
-    if safety.is_sensitive(f"{headline} {body}"):  # dignity rule: no emoji on stories about death or disaster
-        headline, body = safety.strip_emoji(headline), safety.strip_emoji(body)
+    headline, body = safety.strip_emoji(headline), safety.strip_emoji(body)  # dignity rule: no emoji, ever
     return Draft(headline=headline, body=body, claims=claims, source_urls=[article.url], label=label)
 
 

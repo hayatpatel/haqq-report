@@ -89,7 +89,22 @@ def send_log(path: Path, caption: str = "") -> bool:
         return False
 
 
-def draft_preview(headline: str, body: str, lane: str, reason: str, sources: list[str]) -> None:
-    """A draft that needs human review. NOT posted anywhere."""
-    _send(f"DRAFT for review (not posted)\nLane: {lane.upper()} ({reason})\n\n{headline}\n\n{body}"
-          f"\n\nSource: {', '.join(sources)}"[:3900])
+def draft_preview(headline: str, body: str, lane: str, reason: str, sources: list[str],
+                  draft_id: int | None = None) -> None:
+    """A draft that needs human review. NOT posted until you tap Approve (when draft_id is known)."""
+    text = (f"DRAFT for review (not posted)\nLane: {lane.upper()} ({reason})\n\n{headline}\n\n{body}"
+            f"\n\nSource: {', '.join(sources)}")[:3900]
+    if draft_id is None:
+        _send(text)
+        return
+    import json
+
+    from .publish.telegram_channel import _call, optional_env
+    try:
+        keyboard = {"inline_keyboard": [[{"text": "Approve and post", "callback_data": f"a:{draft_id}"},
+                                         {"text": "Reject", "callback_data": f"r:{draft_id}"}]]}
+        _call("sendMessage", {"chat_id": optional_env("TELEGRAM_OWNER_ID"), "text": text,
+                              "reply_markup": json.dumps(keyboard)})
+    except Exception:  # noqa: BLE001 - fall back to a plain preview
+        log.warning("preview with buttons not sent")
+        _send(text)

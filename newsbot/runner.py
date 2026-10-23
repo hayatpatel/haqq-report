@@ -61,19 +61,21 @@ def save_article(store, a: Article) -> int | None:
         return None
 
 
-def save_draft(store, article_id: int | None, outcome: pipeline.Outcome) -> None:
+def save_draft(store, article_id: int | None, outcome: pipeline.Outcome) -> int | None:
     d = outcome.draft
     if store is None or d is None or article_id is None:
-        return
+        return None
     try:
         for c in d.claims:
             store.insert("claims", {"article_id": article_id, "text": c.text, "attribution": c.attribution,
                                     "status": c.status, "verified_by": c.verified_by})
-        store.insert("drafts", {"article_id": article_id, "lane": d.lane.value, "status": "pending",
+        row = store.insert("drafts", {"article_id": article_id, "lane": d.lane.value, "status": "pending",
                                 "headline": d.headline, "body": d.body, "sources": d.source_urls,
                                 "label": d.label, "flags": d.flags})
+        return row.get("id")
     except Exception as exc:  # noqa: BLE001
         log.warning("draft/claims not saved (%s)", type(exc).__name__)
+        return None
 
 
 def on_mission(a: Article, cfg: dict) -> bool:
@@ -155,10 +157,10 @@ def run(priority: bool = False, *, store=None, ai_call: Callable[[str], str] | N
         stats[outcome.action] = stats.get(outcome.action, 0) + 1
         if outcome.draft is None:
             continue
-        save_draft(store, ids.get(article.url), outcome)
+        draft_id = save_draft(store, ids.get(article.url), outcome)
         if outcome.action == "needs_approval" and stats["previews_sent"] < limits.get("max_telegram_drafts", 5):
             d = outcome.draft
-            owner_feed.draft_preview(d.headline, d.body, d.lane.value, outcome.reason, d.source_urls)
+            owner_feed.draft_preview(d.headline, d.body, d.lane.value, outcome.reason, d.source_urls, draft_id)
             stats["previews_sent"] += 1
         elif outcome.action == "ready":
             pipeline.publish_draft(outcome.draft, "", dry_run=True, cfg=cfg)

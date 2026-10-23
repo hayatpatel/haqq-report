@@ -4,10 +4,8 @@
     "handle": "haqqreport",
     "tagline": "Facts first. Sources named. Corrections public."
   },
-
   "mode": "review",
   "mode_notes": "review = every draft goes to Telegram for approval (first 4 weeks). auto = Green and Amber post automatically, Red always needs approval.",
-
   "run": {
     "max_articles": 8,
     "max_telegram_drafts": 5,
@@ -15,7 +13,6 @@
     "off_mission_max": 2,
     "dedupe_days": 7
   },
-
   "owner_feed": {
     "note": "Private Telegram messages to the owner (TELEGRAM_OWNER_ID). No public channel needed.",
     "posts": true,
@@ -24,16 +21,14 @@
     "log_file": "always",
     "log_file_note": "Send each run's log file to Telegram: always | on_error | never"
   },
-
   "enable": {
-    "facebook": false,
+    "facebook": true,
     "instagram": false,
-    "threads": false,
+    "threads": true,
     "bluesky": false,
     "telegram_channel": false,
     "website": false
   },
-
   "limits": {
     "MAX_POSTS_PER_DAY": 10,
     "MAX_RED_PER_DAY": 4,
@@ -44,32 +39,79 @@
     "INGEST_MAX_AGE_HOURS": 48,
     "PLATFORM_FAILURES_BEFORE_PAUSE": 3
   },
-
   "scoring": {
-    "weights": { "significance": 0.35, "impact": 0.30, "interest": 0.35 },
+    "weights": {
+      "significance": 0.35,
+      "impact": 0.3,
+      "interest": 0.35
+    },
     "gap_bonus": 0.8,
     "watch_topic_bonus": 0.5,
     "gap_major_wires_max": 2
   },
-
   "watch_topics": [
-    "palestine", "gaza", "west bank", "jerusalem",
-    "sudan", "yemen", "syria", "lebanon", "afghanistan",
-    "somalia", "rohingya", "kashmir", "xinjiang", "libya",
+    "palestine",
+    "gaza",
+    "west bank",
+    "jerusalem",
+    "sudan",
+    "yemen",
+    "syria",
+    "lebanon",
+    "afghanistan",
+    "somalia",
+    "rohingya",
+    "kashmir",
+    "xinjiang",
+    "libya",
     "islamophobia"
   ],
-
   "mission_keywords": [
-    "muslim", "islam", "mosque", "hajj", "ramadan", "eid ", "quran", "hijab", "imam",
-    "pakistan", "bangladesh", "indonesia", "iran", "iraq", "turkey", "egypt", "jordan", "saudi", "qatar",
-    "tunisia", "morocco", "algeria", "mali", "niger", "chad", "kenya", "ethiopia", "eritrea", "myanmar", "rakhine",
-    "hamas", "israel", "gaza", "idf", "unrwa", "refugee"
+    "muslim",
+    "islam",
+    "mosque",
+    "hajj",
+    "ramadan",
+    "eid ",
+    "quran",
+    "hijab",
+    "imam",
+    "pakistan",
+    "bangladesh",
+    "indonesia",
+    "iran",
+    "iraq",
+    "turkey",
+    "egypt",
+    "jordan",
+    "saudi",
+    "qatar",
+    "tunisia",
+    "morocco",
+    "algeria",
+    "mali",
+    "niger",
+    "chad",
+    "kenya",
+    "ethiopia",
+    "eritrea",
+    "myanmar",
+    "rakhine",
+    "hamas",
+    "israel",
+    "gaza",
+    "idf",
+    "unrwa",
+    "refugee"
   ],
-
   "designated_group_keywords": [
-    "hamas", "hezbollah", "islamic state", "isis", "al-qaeda", "al qaeda"
+    "hamas",
+    "hezbollah",
+    "islamic state",
+    "isis",
+    "al-qaeda",
+    "al qaeda"
   ],
-
   "meta": {
     "graph_version": "v21.0",
     "graph_version_note": "Use the Graph API version shown in the Meta dashboard if newer.",
@@ -79,30 +121,48 @@
     "token_alert_days_before_expiry": 10,
     "token_lifetime_days": 60
   },
-
   "ai": {
-    "provider_order": ["groq", "gemini"],
-    "groq_models": ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
-    "gemini_models": ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-2.5-flash-lite"],
+    "provider_order": [
+      "groq",
+      "gemini"
+    ],
+    "groq_models": [
+      "openai/gpt-oss-120b",
+      "openai/gpt-oss-20b",
+      "llama-3.3-70b-versatile",
+      "llama-3.1-8b-instant"
+    ],
+    "gemini_models": [
+      "gemini-3.5-flash-lite",
+      "gemini-3.8-flash",
+      "gemini-3.6-flash",
+      "gemini-2.5-flash-lite"
+    ],
     "model_note": "Tried in order; a model that returns 400/403/404 is skipped. Run the ai-check workflow to see which models your keys can use, then put those first. gemini-2.0-flash was shut down on 2026-06-01."
   },
-
   "election_silence": {
     "note": "Dates (YYYY-MM-DD) on which political content for a given country must not be published. Telegram reminder 14 days before.",
     "reminder_days_before": 14,
     "blackouts": []
   },
-
   "schedule_ist": {
-    "publish_slots": ["06:30", "13:00", "20:00", "00:30"],
+    "publish_slots": [
+      "06:30",
+      "13:00",
+      "20:00",
+      "00:30"
+    ],
     "palestine_brief": "20:30",
     "calendar_job": "05:00",
     "weekly_report": "Mon 08:45",
     "health": "18:10"
   },
-
   "site": {
     "base_url": "",
     "base_url_note": "Set once the website is deployed (Cloudflare Pages or GitHub Pages)."
+  },
+  "approvals": {
+    "max_age_hours": 24,
+    "note": "Approve/Reject buttons in Telegram. A draft older than this cannot be posted."
   }
 }

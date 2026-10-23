@@ -274,3 +274,11 @@ affected secret immediately.
 - **What gets drafted:** each run picks on-mission stories first (`watch_topics` and `mission_keywords` in `config.json`), best source tier then newest, with at most `run.max_per_source` per source and `run.off_mission_max` off-topic stories.
 - **Casualty figures** must name their source in the same sentence (OCHA, UNRWA, a ministry, a named outlet). "The agency said" fails the safety check.
 - **Cleanup:** headlines are plain text (no markdown or quotes). Drafts about death, injury or disaster have all emoji removed.
+
+## Going live (review mode)
+
+Nothing posts by itself. The hourly run sends each draft to your private Telegram chat with **Approve and post** and **Reject** buttons. The `approvals` workflow checks for your taps every 5 minutes and posts approved drafts to Facebook and Threads (Instagram stays off until image cards exist).
+
+Safeguards: only your Telegram ID can approve; each draft can be acted on once; drafts older than 24 hours cannot be posted; `MAX_POSTS_PER_DAY` is enforced; a failed post goes back to pending and the error is sent to you.
+
+To start: set the repository variable `BOT_ENABLED` to `true` (Settings, Secrets and variables, Actions, Variables). To stop: set it to `false`. Allow up to 5 minutes between your tap and the post.
