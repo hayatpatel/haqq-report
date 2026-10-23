@@ -29,9 +29,21 @@ def check_age_based(platform: str, label: str, refresh_fn, secret_name: str, sto
     cfg = load_config()
     if not optional_env(secret_name):
         return f"SKIP {label}: {secret_name} not set"
-    issued = store.token_issued_at(platform) if store else None
+    if store is None:
+        return f"FAIL {label}: Supabase is not configured, so the token age is unknown"
+    try:
+        issued = store.token_issued_at(platform)
+    except Exception as exc:  # noqa: BLE001 - e.g. tables not created yet; report it, do not crash the job
+        return (f"FAIL {label}: cannot read token age from Supabase ({type(exc).__name__}). "
+                "Apply db/schema.sql in the Supabase SQL editor")
     if issued is None:
-        return f"WARN {label}: no issued_at recorded; record it once with `python -m newsbot token-issued {platform}`"
+        # First run: the token cannot tell us its age. Tokens are normally generated just before setup,
+        # so record today as the issue date. Correct it with `token-issued` if the token is older.
+        try:
+            store.record_token_refresh(platform, now)
+        except Exception as exc:  # noqa: BLE001
+            return f"FAIL {label}: could not record the token date in Supabase ({type(exc).__name__})"
+        return f"OK {label}: first run, token age recorded as 0 days today (use `token-issued {platform} --days-ago N` if older)"
     age = tokens.days_since(issued, now)
     left = tokens.days_until_expiry(issued, now, cfg)
     if tokens.needs_refresh(issued, now, cfg):

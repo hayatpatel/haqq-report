@@ -134,6 +134,18 @@ def cmd_test_post(args) -> int:
     return 1 if failed else 0
 
 
+def cmd_token_issued(args) -> int:
+    """Record when an Instagram/Threads token was really generated (the token cannot tell us itself)."""
+    from datetime import datetime, timedelta, timezone
+
+    from .store import Store
+
+    when = datetime.now(timezone.utc) - timedelta(days=args.days_ago)
+    Store().record_token_refresh(args.platform, when)
+    print(f"recorded {args.platform} token issue date: {when.date()} ({args.days_ago} days ago)")
+    return 0
+
+
 def cmd_notify(args) -> int:
     """Send a free-form message to the owner's private Telegram chat (used by workflow failure steps)."""
     from . import owner_feed
@@ -157,6 +169,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--image-url", default="", help="public JPEG URL (required for instagram)")
     p.add_argument("--keep", action="store_true", help="do not delete the Facebook test post")
     p.set_defaults(fn=cmd_test_post)
+    p = sub.add_parser("token-issued")
+    p.add_argument("platform", choices=["instagram", "threads"])
+    p.add_argument("--days-ago", type=int, default=0)
+    p.set_defaults(fn=cmd_token_issued)
     p = sub.add_parser("notify")
     p.add_argument("text", nargs="+")
     p.set_defaults(fn=cmd_notify)
