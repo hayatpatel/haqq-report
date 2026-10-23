@@ -124,6 +124,41 @@ def cmd_approvals(_args) -> int:
     return 0 if rl.status == "ok" else 1
 
 
+def cmd_card_test(_args) -> int:
+    """Render a sample card and caption, upload the card to Supabase Storage, and send both to Telegram."""
+    import requests
+
+    from . import cards, template
+    from .config import load_config
+    from .models import Draft
+    from .config import optional_env
+    from .publish.telegram_channel import _api
+
+    cfg = load_config()
+    draft = Draft(headline="UN agency says aid trucks reach northern Gaza for the first time in weeks",
+                  body="OCHA said 40 trucks carrying food and medicine crossed on Thursday. The UN warned that supplies "
+                       "remain far below what is needed, and that fuel shortages are still limiting hospital operations.",
+                  source_urls=["https://news.un.org/feed/view/en/story/2026/10/0000000"])
+    with RunLog("card-test", _store_or_none()) as rl:
+        for platform in ("facebook", "threads"):
+            text = template.build_caption(draft, platform, cfg=cfg)
+            limit = cfg["caption_limits"][platform]
+            logging.getLogger("haqq.cli").info("%s caption (%d/%d chars):\n%s", platform, len(text), limit, text)
+        url = cards.publish_url(draft, cfg)
+        if not url:
+            rl.fail("card could not be uploaded to Supabase Storage (see the log above)")
+            return 1
+        head = requests.get(url, timeout=30)
+        logging.getLogger("haqq.cli").info("public card URL: %s -> HTTP %s", url, head.status_code)
+        if head.status_code != 200:
+            rl.fail(f"card URL is not public (HTTP {head.status_code}): run db/migrations/004_cards_bucket.sql")
+            return 1
+        requests.post(_api("sendPhoto"), data={"chat_id": optional_env("TELEGRAM_OWNER_ID"),
+                      "caption": template.build_caption(draft, "threads", cfg=cfg)[:1000]},
+                      files={"photo": ("card.jpg", head.content)}, timeout=60)
+    return 0 if rl.status == "ok" else 1
+
+
 def cmd_health(_args) -> int:
     from .runlog import RunLog
 
@@ -332,6 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("corrections").set_defaults(fn=cmd_corrections)
     sub.add_parser("health").set_defaults(fn=cmd_health)
     sub.add_parser("approvals").set_defaults(fn=cmd_approvals)
+    sub.add_parser("card-test").set_defaults(fn=cmd_card_test)
     p = sub.add_parser("test-post")
     p.add_argument("platform", choices=["facebook", "instagram", "threads", "all"])
     p.add_argument("--live", action="store_true", help="really publish (default is a dry run)")

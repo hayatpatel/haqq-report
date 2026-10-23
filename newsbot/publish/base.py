@@ -115,7 +115,7 @@ def run_platform(platform: str, fn: Callable[[], str], *, store: JsonStateStore 
     if alert:
         msg = f"[{platform}] publish failed ({failures}/{limit}): {last_error}"
         if paused:
-            msg += f"\n{platform} auto-paused. Fix it, then /resume {platform}."
+            msg += f"\n{platform} paused for the rest of this run after {limit} failures; it is tried again at the next scheduled run."
         try:
             alert(msg)
         except Exception:  # noqa: BLE001

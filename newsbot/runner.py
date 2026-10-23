@@ -1,7 +1,7 @@
-"""End-to-end run: fetch -> dedupe -> store -> claims -> verify -> draft -> store -> review/dry-run.
+"""End-to-end run: fetch -> dedupe -> store -> claims -> verify -> draft -> store -> post or review.
 
-Everything is saved to Supabase when it is reachable and logged in detail. NOTHING is published:
-drafts go to the owner on Telegram for review, and `ready` drafts are only dry-run published.
+Everything is saved to Supabase and logged in detail. In auto mode Green and Amber drafts are posted
+(with a branded card); Red drafts, and everything in review mode, go to the owner on Telegram with buttons.
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Callable
 
 from . import ai, ingest, owner_feed, pipeline, scoring, sources
 from .config import load_config
-from .models import Article
+from .models import Article, Draft, Lane
 
 log = logging.getLogger("haqq.run")
 
@@ -78,7 +78,7 @@ def save_draft(store, article_id: int | None, outcome: pipeline.Outcome) -> int 
         return None
 
 
-def publish_ready(store, draft_id, draft, cfg: dict, stats: dict) -> None:
+def publish_ready(store, draft_id, draft, cfg: dict, stats: dict, final: bool = False) -> None:
     """Auto mode: post a Green/Amber draft live, record it, respect the daily cap. Needs the database."""
     from . import approvals
 
@@ -96,13 +96,32 @@ def publish_ready(store, draft_id, draft, cfg: dict, stats: dict) -> None:
         done = [r for r in results if r.ok and not r.skipped]
         for r in done:
             store.insert("posts", {"draft_id": draft_id, "platform": r.platform, "platform_post_id": r.post_id})
-        store.update("drafts", {"id": draft_id}, {"status": "posted" if done else "pending"})
+        store.update("drafts", {"id": draft_id}, {"status": "posted" if done else ("skipped" if final else "pending")})
         stats["published"] = stats.get("published", 0) + (1 if done else 0)
         if not done:
             stats["publish_failed"] = stats.get("publish_failed", 0) + 1
     except Exception as exc:  # noqa: BLE001 - never lose the rest of the run
         log.exception("auto-post failed (%s)", type(exc).__name__)
         stats["publish_failed"] = stats.get("publish_failed", 0) + 1
+
+
+def retry_unposted(store, cfg: dict, stats: dict, limit: int = 3) -> None:
+    """Auto mode: one more try for Green/Amber drafts from the last 24h that never reached any platform."""
+    if store is None or cfg.get("mode") != "auto":
+        return
+    try:
+        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        rows = store.select_raw("drafts", {"status": "eq.pending", "lane": "in.(green,amber)",
+                                           "created_at": f"gte.{since}", "order": "created_at.asc", "limit": str(limit)})
+        for row in rows:
+            if store.select_raw("posts", {"draft_id": f"eq.{row['id']}", "select": "id"}):
+                continue
+            draft = Draft(headline=row["headline"], body=row["body"], lane=Lane(row["lane"]),
+                          source_urls=row.get("sources") or [], label=row.get("label") or "", flags=row.get("flags") or [])
+            publish_ready(store, row["id"], draft, cfg, stats, final=True)
+            stats["retried"] = stats.get("retried", 0) + 1
+    except Exception as exc:  # noqa: BLE001
+        log.warning("retry of unposted drafts skipped (%s)", type(exc).__name__)
 
 
 def on_mission(a: Article, cfg: dict) -> bool:
@@ -161,6 +180,8 @@ def run(priority: bool = False, *, store=None, ai_call: Callable[[str], str] | N
     fresh = ingest.dedupe(ingest.within_window(fetched, cfg=cfg), known_keys(store, limits.get("dedupe_days", 7)))
     stats["new"] = len(fresh)
     log.info("%d fetched, %d new after dedupe and window", len(fetched), len(fresh))
+
+    retry_unposted(store, cfg, stats)
 
     ids: dict[str, int | None] = {}
     for article in fresh:  # store every new article, even those we do not draft this run

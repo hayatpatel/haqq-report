@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from . import claims as claims_mod
-from . import safety, verify
+from . import cards, safety, template, verify
 from .config import load_config, platform_enabled
 from .models import Article, Draft, Lane, Tier
 from .publish import bluesky, instagram, meta_fb, threads
@@ -94,13 +94,9 @@ def process_article(article: Article, ai_call: Callable[[str], str], cfg: dict |
     return Outcome(article.url, "ready", draft=draft)
 
 
-def build_caption(draft: Draft, platform: str, page_url: str = "") -> str:
-    """Per-platform caption. Full publisher URL only (no shorteners); Meta links go in a first comment
-    or on the website page, never as a shortened link in the caption."""
-    base = f"{draft.headline}\n\n{draft.body}".strip()
-    if platform in ("threads", "bluesky", "telegram_channel") and (page_url or draft.source_urls):
-        base += f"\n\n{page_url or draft.source_urls[0]}"
-    return base
+def build_caption(draft: Draft, platform: str, page_url: str = "", cfg: dict | None = None) -> str:
+    """Standard Haqq Report template, fitted to the platform's length limit (see template.py)."""
+    return template.build_caption(draft, platform, page_url, cfg)
 
 
 def publish_draft(draft: Draft, image_url: str = "", *, dry_run: bool = True,
@@ -120,20 +116,31 @@ def publish_draft(draft: Draft, image_url: str = "", *, dry_run: bool = True,
             if res.ok:
                 page_url = cfg["site"].get("base_url", "").rstrip("/") + res.post_id
 
+    if not dry_run and not image_url and any(platform_enabled(p, cfg) for p in ("facebook", "instagram", "threads")):
+        image_url = cards.publish_url(draft, cfg)
+
     def fb() -> str:
-        post_id = (meta_fb.post_photo(image_url, build_caption(draft, "facebook"))
-                   if image_url else meta_fb.post_text(build_caption(draft, "facebook")))
+        caption = build_caption(draft, "facebook", cfg=cfg)
+        post_id = meta_fb.post_photo(image_url, caption) if image_url else meta_fb.post_text(caption)
+        # From here the post EXISTS. Nothing below may raise, or the retry would post it a second time.
         if draft.source_urls:
-            meta_fb.first_comment(post_id, "Source: " + draft.source_urls[0])
+            try:
+                meta_fb.first_comment(post_id, "Source: " + draft.source_urls[0])
+            except Exception as exc:  # noqa: BLE001 - usually a missing pages_manage_engagement permission
+                log.warning("facebook source comment failed (%s); adding the link to the caption instead", str(exc)[:120])
+                try:
+                    meta_fb.update_message(post_id, caption + "\n" + draft.source_urls[0])
+                except Exception as exc2:  # noqa: BLE001
+                    log.warning("facebook caption update failed too: %s", str(exc2)[:120])
         return post_id
 
     jobs: dict[str, Callable[[], str]] = {
         "facebook": fb,
-        "instagram": lambda: instagram.publish_image(image_url, build_caption(draft, "instagram")),
-        "threads": lambda: threads.publish(build_caption(draft, "threads", page_url), image_url or None),
-        "bluesky": lambda: bluesky.publish(build_caption(draft, "bluesky", page_url)),
+        "instagram": lambda: instagram.publish_image(image_url, build_caption(draft, "instagram", cfg=cfg)),
+        "threads": lambda: threads.publish(build_caption(draft, "threads", page_url, cfg), image_url or None),
+        "bluesky": lambda: bluesky.publish(build_caption(draft, "bluesky", page_url, cfg)),
         "telegram_channel": lambda: telegram_channel.send_to_channel(
-            build_caption(draft, "telegram_channel", page_url), image_url or None),
+            build_caption(draft, "telegram_channel", page_url, cfg), image_url or None),
     }
 
     for platform, job in jobs.items():

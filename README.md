@@ -287,3 +287,9 @@ Safeguards: `MAX_POSTS_PER_DAY` (10) is enforced; nothing posts if the database 
 Reviewing later: use Telegram or the platform itself. Delete a post on the platform and, if it was wrong, add a public correction (`corrections` workflow).
 
 To pause: set the repository variable `BOT_ENABLED` to `false`, or set `mode` back to `review` in `config.json`.
+
+## Post template and cards
+
+Every post follows one template (`newsbot/template.py`): headline, body trimmed to fit, `Source: <outlet>`, hashtags. Limits per platform are in `config.json` (`caption_limits`; Threads is 480 to stay under its 500 cap). Facebook keeps the source link in a first comment; if the Page token lacks `pages_manage_engagement`, the link is added to the caption instead and the post still counts as posted.
+
+Every post carries a branded 1080x1080 card made by `newsbot/cards.py` (our own design, not third-party photos), uploaded to a public Supabase Storage bucket named `cards` (created automatically; `db/migrations/004_cards_bucket.sql` is the manual fallback). If a card cannot be made the post goes out as text. Run Actions, **card-test** to see the template and card in your Telegram.

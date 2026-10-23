@@ -1,3 +1,4 @@
 requests>=2.32
 feedparser>=6.0
 pynacl>=1.5
+pillow>=10.1

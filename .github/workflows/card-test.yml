@@ -1,0 +1,42 @@
+name: card-test (see the post template)
+
+# Manual. Renders a sample card, uploads it to Supabase Storage, and sends the card and caption to your Telegram.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  card-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Render, upload, send
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OWNER_ID: ${{ secrets.TELEGRAM_OWNER_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python -m newsbot card-test
+      - name: Upload run log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: card-test-log-${{ github.run_id }}
+          path: logs/
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Tell the owner on Telegram if this run failed
+        if: ${{ failure() }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OWNER_ID: ${{ secrets.TELEGRAM_OWNER_ID }}
+        run: |
+          python -m newsbot notify "ERROR: workflow 'card-test' failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

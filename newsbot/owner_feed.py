@@ -41,7 +41,7 @@ def post_results(headline: str, results: Iterable, *, dry_run: bool, cfg: dict |
         return
     ok = [r for r in results if r.ok and not r.skipped]
     failed = [r for r in results if not r.ok]
-    title = "DRY RUN (nothing was published)" if dry_run else "Published"
+    title = "DRY RUN (nothing was published)" if dry_run else ("Posted" if ok else "NOT posted")
     lines = [f"{title}: {headline[:120]}"]
     for r in results:
         if r.skipped and r.ok:

@@ -36,7 +36,7 @@ def test_platform_pauses_after_three_failures_and_only_that_platform(store):
 
     assert store.get("instagram")["paused"] is True
     assert store.get("facebook")["paused"] is False
-    assert "auto-paused" in alerts[-1]
+    assert "paused" in alerts[-1]
 
     skipped = run_platform("instagram", lambda: "x", store=store, sleep=lambda s: None)
     assert skipped.skipped

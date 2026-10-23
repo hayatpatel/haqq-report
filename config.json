@@ -1,8 +1,8 @@
 {
   "brand": {
-    "name": "Haqq Report",
-    "handle": "haqqreport",
-    "tagline": "Facts first. Sources named. Corrections public."
+    "card_name": "HAQQ REPORT",
+    "hashtag": "#HaqqReport",
+    "footer": "Truth beats speed"
   },
   "mode": "auto",
   "mode_notes": "review = every draft goes to Telegram for approval (first 4 weeks). auto = Green and Amber post automatically, Red always needs approval.",
@@ -164,5 +164,55 @@
   "approvals": {
     "max_age_hours": 24,
     "note": "Approve/Reject buttons in Telegram. A draft older than this cannot be posted."
+  },
+  "cards": {
+    "enabled": true
+  },
+  "caption_limits": {
+    "facebook": 1800,
+    "instagram": 1800,
+    "threads": 480,
+    "bluesky": 290,
+    "telegram_channel": 900
+  },
+  "hashtags": {
+    "palestine": "#Palestine",
+    "gaza": "#Gaza",
+    "west bank": "#WestBank",
+    "jerusalem": "#Jerusalem",
+    "sudan": "#Sudan",
+    "yemen": "#Yemen",
+    "syria": "#Syria",
+    "lebanon": "#Lebanon",
+    "afghanistan": "#Afghanistan",
+    "somalia": "#Somalia",
+    "rohingya": "#Rohingya",
+    "kashmir": "#Kashmir",
+    "xinjiang": "#Xinjiang",
+    "libya": "#Libya",
+    "islamophobia": "#Islamophobia",
+    "pakistan": "#Pakistan",
+    "iran": "#Iran",
+    "iraq": "#Iraq"
+  },
+  "source_names": {
+    "news.un.org": "UN News",
+    "aljazeera.com": "Al Jazeera",
+    "middleeasteye.net": "Middle East Eye",
+    "bbc.co.uk": "BBC News",
+    "bbc.com": "BBC News",
+    "theguardian.com": "The Guardian",
+    "972mag.com": "+972 Magazine",
+    "mondoweiss.net": "Mondoweiss",
+    "dawn.com": "Dawn",
+    "cpj.org": "Committee to Protect Journalists",
+    "reuters.com": "Reuters",
+    "apnews.com": "Associated Press",
+    "timesofisrael.com": "The Times of Israel",
+    "ochaopt.org": "UN OCHA",
+    "unrwa.org": "UNRWA",
+    "who.int": "WHO",
+    "hrw.org": "Human Rights Watch",
+    "amnesty.org": "Amnesty International"
   }
 }

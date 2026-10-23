@@ -53,6 +53,11 @@ def first_comment(post_id: str, message: str) -> str:
     return out["id"]
 
 
+def update_message(post_id: str, message: str) -> None:
+    _, token = _creds()
+    graph_request("POST", f"{_base()}/{post_id}", data={"message": message, "access_token": token})
+
+
 def delete_post(post_id: str) -> bool:
     """Retract a post. Facebook supports API deletion; Instagram and Threads do not."""
     _, token = _creds()
