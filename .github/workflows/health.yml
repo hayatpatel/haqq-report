@@ -37,3 +37,11 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python -m newsbot health
+
+      - name: Tell the owner on Telegram if this run failed
+        if: ${{ failure() }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OWNER_ID: ${{ secrets.TELEGRAM_OWNER_ID }}
+        run: |
+          python -m newsbot notify "ERROR: workflow '${{ github.workflow }}' failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

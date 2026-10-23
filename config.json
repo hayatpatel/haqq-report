@@ -8,6 +8,13 @@
   "mode": "review",
   "mode_notes": "review = every draft goes to Telegram for approval (first 4 weeks). auto = Green and Amber post automatically, Red always needs approval.",
 
+  "owner_feed": {
+    "note": "Private Telegram messages to the owner (TELEGRAM_OWNER_ID). No public channel needed.",
+    "posts": true,
+    "errors": true,
+    "daily_health_report": true
+  },
+
   "enable": {
     "facebook": false,
     "instagram": false,
