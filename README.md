@@ -206,6 +206,11 @@ Every run also leaves a detailed record:
 | Supabase `run_logs` | Status, summary counts and the log text (last 200 KB) |
 | Telegram | The log file itself, sent to your private chat (`owner_feed.log_file`: `always`, `on_error` or `never`) |
 
+AI models: `config.json` lists several candidates per provider and tries them in order, skipping any that return
+400/403/404 (provider model names change; `gemini-2.0-flash` was shut down on 2026-06-01). Run the **ai-check** workflow
+to see which models your keys can use and get a test result on Telegram. Articles are marked `processed` after
+drafting (`db/migrations/003_articles_processed.sql`), so stories stored during an AI outage are retried.
+
 Articles, claims and drafts are stored in the `articles`, `claims` and `drafts` tables. The `run_logs` table and
 `articles.source_name` column come from `db/migrations/002_run_logs.sql` (also in `db/schema.sql`); run it once
 in the Supabase SQL editor if you applied the schema before.

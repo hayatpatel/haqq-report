@@ -38,6 +38,7 @@ create table if not exists articles (
   source_id    bigint references sources(id),
   tier         text,
   source_name  text,
+  processed    boolean default false,
   language     text default 'en',
   translated   boolean default false,
   published_at timestamptz,

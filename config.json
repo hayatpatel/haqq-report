@@ -73,9 +73,9 @@
 
   "ai": {
     "provider_order": ["groq", "gemini"],
-    "groq_model": "llama-3.3-70b-versatile",
-    "gemini_model": "gemini-2.0-flash",
-    "model_note": "Free-tier model names change. Confirm in each provider's console."
+    "groq_models": ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
+    "gemini_models": ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-2.5-flash-lite"],
+    "model_note": "Tried in order; a model that returns 400/403/404 is skipped. Run the ai-check workflow to see which models your keys can use, then put those first. gemini-2.0-flash was shut down on 2026-06-01."
   },
 
   "election_silence": {
