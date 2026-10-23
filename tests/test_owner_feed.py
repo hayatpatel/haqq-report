@@ -14,14 +14,15 @@ def capture(monkeypatch):
 def test_dry_run_summary_is_labelled(monkeypatch):
     sent = capture(monkeypatch)
     owner_feed.post_results("UN OCHA reports aid", [PublishResult("facebook", ok=True, skipped=True)], dry_run=True, cfg=ON)
-    assert len(sent) == 1 and "DRY RUN" in sent[0] and "facebook: would post" in sent[0]
+    assert len(sent) == 1 and "DRY RUN" in sent[0] and "Facebook: would post" in sent[0]
 
 
 def test_live_success_and_failure_reported(monkeypatch):
     sent = capture(monkeypatch)
     res = [PublishResult("facebook", ok=True, post_id="1_2"), PublishResult("instagram", ok=False, error="token expired")]
     owner_feed.post_results("Headline", res, dry_run=False, cfg=ON)
-    assert "ATTENTION" in sent[0] and "facebook: OK 1_2" in sent[0] and "instagram: FAILED token expired" in sent[0]
+    assert sent[0].startswith("⚠️ PARTLY POSTED") and "Facebook: ✅ https://www.facebook.com/1_2" in sent[0]
+    assert "Instagram: ❌ The access token is expired or invalid." in sent[0] and "Fix:" in sent[0]
 
 
 def test_disabled_flags_send_nothing(monkeypatch):
@@ -35,7 +36,7 @@ def test_disabled_flags_send_nothing(monkeypatch):
 def test_failed_health_always_sent_even_when_daily_report_off(monkeypatch):
     sent = capture(monkeypatch)
     owner_feed.health_report("instagram FAIL", failed=True, cfg=OFF)
-    assert sent and sent[0].startswith("ACTION NEEDED")
+    assert sent and sent[0].startswith("🔴 ACTION NEEDED")
 
 
 def test_feed_never_raises(monkeypatch):
@@ -92,3 +93,16 @@ def test_test_post_failure_becomes_github_annotation(monkeypatch, capsys, tmp_pa
     out = capsys.readouterr().out
     assert "::error title=test-post threads::PublishError: HTTP 400" in out and "190" in out
     assert "Test post" in (tmp_path / "s.md").read_text()
+
+
+def test_error_message_is_structured_and_plain():
+    sent = []
+    import newsbot.owner_feed as f
+    f.alert_owner = sent.append
+    f.error("facebook", 'HTTP 403: {"message": "(#200) You do not have sufficient permissions"}', cfg=ON)
+    assert sent[0].startswith("❌ ERROR · facebook\nWhat: The access token lacks a permission.\nFix:")
+
+
+def test_run_summary_caption_is_readable():
+    text = owner_feed.format_run_summary("run", "ok", {"fetched": 164, "new": 92, "published": 3, "publish_failed": 0, "duplicate": 2})
+    assert text == "🟢 RUN · ok\nFetched 164 · New 92 · Posted 3 · Duplicates 2"

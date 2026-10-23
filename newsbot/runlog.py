@@ -82,4 +82,4 @@ class RunLog:
         cfg = self.cfg or load_config()
         policy = cfg.get("owner_feed", {}).get("log_file", "always")
         if policy == "always" or (policy == "on_error" and self.status != "ok"):
-            owner_feed.send_log(self.path, f"{self.name}: {self.status} {self.summary}")
+            owner_feed.send_log(self.path, owner_feed.format_run_summary(self.name, self.status, self.summary))

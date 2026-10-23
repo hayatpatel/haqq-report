@@ -34,6 +34,8 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_TOKEN: ${{ secrets.IG_TOKEN }}
           TH_USER_ID: ${{ secrets.TH_USER_ID }}
           TH_TOKEN: ${{ secrets.TH_TOKEN }}
         run: python -m newsbot approvals

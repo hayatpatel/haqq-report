@@ -78,6 +78,23 @@ class Store:
         resp = requests.patch(f"{self.base}/{table}", headers=self.headers, params=params, json=values, timeout=30)
         resp.raise_for_status()
 
+    def delete(self, table: str, params: dict) -> int:
+        """Delete matching rows; returns how many were removed."""
+        headers = {**self.headers, "Prefer": "return=representation"}
+        resp = requests.delete(f"{self.base}/{table}", headers=headers, params=params, timeout=60)
+        resp.raise_for_status()
+        return len(resp.json())
+
+    def claim(self, table: str, row_id, from_status: str, to_status: str, extra: dict | None = None) -> bool:
+        """Atomically move a row from one status to another. True only for the ONE caller that wins the race,
+        so two workflows can never both post the same draft."""
+        headers = {**self.headers, "Prefer": "return=representation"}
+        resp = requests.patch(f"{self.base}/{table}", headers=headers,
+                              params={"id": f"eq.{row_id}", "status": f"eq.{from_status}"},
+                              json={"status": to_status, **(extra or {})}, timeout=30)
+        resp.raise_for_status()
+        return len(resp.json()) == 1
+
     def check(self) -> list[tuple[str, bool, str]]:
         """Connection test: can we read every required table? Returns (table, ok, detail)."""
         out = []

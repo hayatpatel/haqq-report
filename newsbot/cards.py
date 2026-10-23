@@ -1,4 +1,4 @@
-"""Branded image card for every post: our own design, no third-party photos (copyright-safe).
+"""Branded image card for every post (headline, topic, date; the source is in the caption): our own design, no third-party photos (copyright-safe).
 
 render() makes a 1080x1080 JPEG. publish_url() uploads it to a public Supabase Storage bucket ("cards") and
 returns the public URL for Facebook, Threads and Instagram. Never raises: no card means a text-only post.
@@ -47,7 +47,7 @@ def _wrap(draw, text: str, font, width: int) -> list[str]:
     return lines + ([line] if line else [])
 
 
-def render(headline: str, topic: str, source: str, brand: str = "HAQQ REPORT",
+def render(headline: str, topic: str, brand: str = "HAQQ REPORT",
            footer: str = "Truth beats speed", when: datetime | None = None) -> bytes:
     from PIL import Image, ImageDraw
 
@@ -76,12 +76,10 @@ def render(headline: str, topic: str, source: str, brand: str = "HAQQ REPORT",
         y += int(size * 1.28)
 
     d.line([m, 900, SIZE - m, 900], fill=(40, 70, 56), width=2)
-    d.text((m, 925), "SOURCE", font=_font(SANS, 22), fill=MUTED)
-    d.text((m, 955), source[:34], font=_font(SANS, 36), fill=WHITE)
     stamp = (when or datetime.now(timezone.utc)).strftime("%d %b %Y").lstrip("0")
-    small = _font(SANS, 24)
-    d.text((SIZE - m - d.textlength(stamp, font=small), 930), stamp, font=small, fill=WHITE)
-    d.text((SIZE - m - d.textlength(footer, font=small), 968), footer, font=small, fill=MUTED)
+    small = _font(SANS, 28)
+    d.text((m, 945), stamp, font=small, fill=WHITE)
+    d.text((SIZE - m - d.textlength(footer, font=small), 945), footer, font=small, fill=MUTED)
     buf = io.BytesIO()
     img.save(buf, "JPEG", quality=92)
     return buf.getvalue()
@@ -110,8 +108,7 @@ def publish_url(draft: Draft, cfg: dict | None = None) -> str:
         return ""
     try:
         text = f"{draft.headline} {draft.body}"
-        url = draft.source_urls[0] if draft.source_urls else ""
-        data = render(draft.headline, template.topic_label(text, cfg), template.source_name(url, cfg) if url else "",
+        data = render(draft.headline, template.topic_label(text, cfg),
                       cfg.get("brand", {}).get("card_name", "HAQQ REPORT"), cfg.get("brand", {}).get("footer", ""))
         name = f"{datetime.now(timezone.utc):%Y-%m-%d}/{hashlib.sha1(draft.headline.encode()).hexdigest()[:12]}.jpg"
         return upload(data, name)

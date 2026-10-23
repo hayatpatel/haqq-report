@@ -5,7 +5,7 @@ import pytest
 from newsbot import approvals, owner_feed, pipeline
 from newsbot.publish.base import PublishResult
 
-CFG = {"limits": {"MAX_POSTS_PER_DAY": 2}, "approvals": {"max_age_hours": 24}}
+CFG = {"limits": {"MAX_POSTS_PER_DAY": 2, "INGEST_MAX_AGE_HOURS": 48}, "approvals": {"max_age_hours": 24}}
 
 
 class Store:
@@ -24,6 +24,12 @@ class Store:
 
     def update(self, table, match, values):
         self.updates.append(values); self.draft.update(values)
+
+    def claim(self, table, row_id, from_status, to_status, extra=None):
+        if self.draft["status"] != from_status:
+            return False
+        self.draft.update({"status": to_status, **(extra or {})})
+        return True
 
     def insert(self, table, row):
         self.inserts.append((table, row))
@@ -106,3 +112,15 @@ def test_auto_publish_never_posts_without_database(monkeypatch):
     stats = {}
     runner.publish_ready(None, None, Draft(headline="H", body="b"), CFG, stats)
     assert stats["publish_blocked"] == 1
+
+
+def test_second_job_cannot_claim_a_draft_already_being_posted(monkeypatch):
+    from newsbot import runner
+    from newsbot.models import Draft
+
+    monkeypatch.setattr(pipeline, "publish_draft", lambda *a, **k: pytest.fail("posted twice"))
+    st = Store(status="approved")  # another job already claimed it
+    st.draft["status"] = "approved"
+    stats = {}
+    runner.publish_ready(st, 7, Draft(headline="H", body="b"), CFG, stats)
+    assert stats["already_claimed"] == 1

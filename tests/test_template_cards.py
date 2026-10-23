@@ -28,7 +28,7 @@ def test_facebook_keeps_link_out_of_caption_and_names_source():
 
 def test_card_is_a_1080_jpeg():
     from PIL import Image
-    img = Image.open(io.BytesIO(cards.render("A very long headline " * 12, "GAZA", "UN News")))
+    img = Image.open(io.BytesIO(cards.render("A very long headline " * 12, "GAZA")))
     assert img.size == (1080, 1080) and img.format == "JPEG"
 
 
@@ -60,7 +60,7 @@ def test_unposted_green_drafts_get_one_final_retry(monkeypatch):
             return [{"id": 5, "headline": "H", "body": "b", "lane": "green", "sources": [], "label": "", "flags": []}] \
                 if table == "drafts" else []
     stats = {}
-    runner.retry_unposted(S(), {"mode": "auto"}, stats)
+    runner.retry_unposted(S(), {"mode": "auto", "limits": {"INGEST_MAX_AGE_HOURS": 48}}, stats)
     assert calls == [(5, True)] and stats["retried"] == 1
     calls.clear()
     runner.retry_unposted(S(), {"mode": "review"}, {})

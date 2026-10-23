@@ -76,11 +76,13 @@ def handle(store, cb: dict, cfg: dict) -> str:
         _answer(cb["id"], "Daily post limit reached. Try tomorrow.")
         return f"draft {raw_id} blocked by daily limit"
 
-    store.update("drafts", {"id": raw_id}, {"status": "approved", "decided_at": now.isoformat()})  # claim it first
+    if not store.claim("drafts", raw_id, "pending", "approved", {"decided_at": now.isoformat()}):
+        _answer(cb["id"], "Already being handled")
+        return f"draft {raw_id} already claimed"
     _close_buttons(cb)
     draft = Draft(headline=row["headline"], body=row["body"], lane=Lane(row["lane"]),
                   source_urls=row.get("sources") or [], label=row.get("label") or "", flags=row.get("flags") or [])
-    results = pipeline.publish_draft(draft, "", dry_run=False, alert=owner_feed.message, cfg=cfg)
+    results = pipeline.publish_draft(draft, "", dry_run=False, cfg=cfg)
     done = [r for r in results if r.ok and not r.skipped]
     for r in done:
         store.insert("posts", {"draft_id": int(raw_id), "platform": r.platform, "platform_post_id": r.post_id})
@@ -90,8 +92,7 @@ def handle(store, cb: dict, cfg: dict) -> str:
         return f"draft {raw_id} posted: " + ", ".join(r.platform for r in done)
     store.update("drafts", {"id": raw_id}, {"status": "pending"})  # nothing went out: allow another try
     errors = "; ".join(f"{r.platform}: {r.error}" for r in results) or "no platform enabled"
-    _answer(cb["id"], "Not posted: " + errors)
-    owner_feed.error("approve draft " + raw_id, errors, cfg)
+    _answer(cb["id"], "Not posted. See the message in this chat.")
     return f"draft {raw_id} NOT posted: {errors}"
 
 

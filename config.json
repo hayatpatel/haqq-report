@@ -11,7 +11,7 @@
     "max_telegram_drafts": 5,
     "max_per_source": 3,
     "off_mission_max": 2,
-    "dedupe_days": 7
+    "dedupe_days": 3
   },
   "owner_feed": {
     "note": "Private Telegram messages to the owner (TELEGRAM_OWNER_ID). No public channel needed.",
@@ -23,7 +23,7 @@
   },
   "enable": {
     "facebook": true,
-    "instagram": false,
+    "instagram": true,
     "threads": true,
     "bluesky": false,
     "telegram_channel": false,
@@ -162,7 +162,7 @@
     "base_url_note": "Set once the website is deployed (Cloudflare Pages or GitHub Pages)."
   },
   "approvals": {
-    "max_age_hours": 24,
+    "max_age_hours": 48,
     "note": "Approve/Reject buttons in Telegram. A draft older than this cannot be posted."
   },
   "cards": {
@@ -214,5 +214,13 @@
     "who.int": "WHO",
     "hrw.org": "Human Rights Watch",
     "amnesty.org": "Amnesty International"
+  },
+  "retention": {
+    "hours": 72,
+    "run_logs_days": 7,
+    "note": "News data (articles, claims, drafts, posts) older than this is deleted on every run. Stories older than limits.INGEST_MAX_AGE_HOURS (48) are never posted."
+  },
+  "ingest": {
+    "keep_undated": false
   }
 }

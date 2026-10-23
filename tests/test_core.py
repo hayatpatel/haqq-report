@@ -15,7 +15,7 @@ def art(url="https://e.com/a", title="UN OCHA reports aid", summary="UN OCHA sai
 def test_config_loads_in_auto_mode_with_only_text_platforms_on():
     cfg = config.load_config()
     assert cfg["mode"] == "auto"  # Green/Amber post automatically; Red always waits for a human
-    assert {k for k, v in cfg["enable"].items() if v} == {"facebook", "threads"}  # instagram needs image cards
+    assert {k for k, v in cfg["enable"].items() if v} == {"facebook", "instagram", "threads"}
     assert cfg["limits"]["MAX_POSTS_PER_DAY"] == 10
 
 

@@ -32,8 +32,41 @@ def _send(text: str) -> None:
         log.warning("owner feed message not sent")
 
 
-def post_results(headline: str, results: Iterable, *, dry_run: bool, cfg: dict | None = None) -> None:
-    """One summary message per post: where it went, and anything that failed."""
+# ---- Standard message templates -------------------------------------------------------------------------
+# Every message starts with ONE status line (icon, what happened, context), then short labelled lines.
+# Icons: ✅ done  ⚠️ partly done / needs a look  ❌ failed  🔴 needs your decision  🟢 run ok  🧪 test
+
+_FIXES = [
+    (("(#200)", '"code": 200'), "The access token lacks a permission.",
+     "Regenerate the token with the needed permissions (Facebook: pages_manage_posts, pages_manage_engagement. Instagram: instagram_business_content_publish. Threads: threads_content_publish), then update the secret in GitHub."),
+    (('"code": 190', "expired", "Invalid OAuth"), "The access token is expired or invalid.",
+     "Create a new token and update the secret in GitHub (Settings, Secrets and variables, Actions)."),
+    (("must be at most",), "The caption is longer than the platform allows.", "This is a bug on our side. Send me the log."),
+    (("Missing required environment variables",), "A secret is not available to this workflow.",
+     "Add the secret in GitHub, or check the workflow passes it under env."),
+    (("platform paused",), "Paused after repeated failures in this run.", "Fix the earlier error; it is tried again at the next run."),
+    (("needs an image",), "No image was available for this post.", "Check that the card upload to Supabase Storage works (run card-test)."),
+    (("rate", '"code": 4,', '"code": 17', '"code": 32', '"code": 613'), "The platform is rate limiting us.", "Nothing to do. It retries next run."),
+]
+
+
+def friendly_error(raw: str) -> tuple[str, str]:
+    """(what happened in plain words, what to do). Falls back to the raw text, shortened."""
+    for needles, what, fix in _FIXES:
+        if any(n in raw for n in needles):
+            return what, fix
+    return raw.strip()[:200] or "Unknown error.", ""
+
+
+def _post_link(platform: str, post_id: str) -> str:
+    if platform == "facebook" and post_id:
+        return f"https://www.facebook.com/{post_id}"
+    return f"id {post_id}" if post_id else "posted"
+
+
+def post_results(headline: str, results: Iterable, *, dry_run: bool, cfg: dict | None = None,
+                 lane: str = "", source: str = "") -> None:
+    """One message per story: status line, headline, one line per platform, source."""
     if not _enabled("posts", cfg):
         return
     results = list(results)
@@ -41,31 +74,53 @@ def post_results(headline: str, results: Iterable, *, dry_run: bool, cfg: dict |
         return
     ok = [r for r in results if r.ok and not r.skipped]
     failed = [r for r in results if not r.ok]
-    title = "DRY RUN (nothing was published)" if dry_run else ("Posted" if ok else "NOT posted")
-    lines = [f"{title}: {headline[:120]}"]
+    if dry_run:
+        status = "🧪 DRY RUN · nothing was posted"
+    elif ok and failed:
+        status = "⚠️ PARTLY POSTED"
+    elif ok:
+        status = "✅ POSTED"
+    else:
+        status = "❌ NOT POSTED"
+    if lane:
+        status += f" · {lane.upper()}"
+    lines = [status, headline[:140], ""]
+    fixes = []
     for r in results:
+        name = r.platform.replace("_", " ").title()
         if r.skipped and r.ok:
-            lines.append(f"  {r.platform}: would post")
+            lines.append(f"{name}: would post")
         elif r.ok:
-            lines.append(f"  {r.platform}: OK {r.post_id or ''}".rstrip())
+            lines.append(f"{name}: ✅ {_post_link(r.platform, r.post_id)}")
         else:
-            lines.append(f"  {r.platform}: FAILED {r.error or ''}".rstrip())
-    if failed:
-        lines.insert(0, "ATTENTION: some platforms failed")
-    elif not dry_run and not ok:
+            what, fix = friendly_error(r.error or "")
+            lines.append(f"{name}: ❌ {what}")
+            if fix and fix not in fixes:
+                fixes.append(fix)
+    if fixes:
+        lines += ["", "Fix: " + " ".join(fixes)]
+    if source:
+        lines += ["", f"Source: {source}"]
+    if not dry_run and not ok and not failed:
         return
     _send("\n".join(lines))
 
 
 def error(where: str, detail: str, cfg: dict | None = None) -> None:
     if _enabled("errors", cfg):
-        _send(f"ERROR in {where}\n{detail[:3000]}")
+        what, fix = friendly_error(detail)
+        lines = [f"❌ ERROR · {where}", f"What: {what}"]
+        if fix:
+            lines.append(f"Fix: {fix}")
+        if what != detail.strip()[:200]:
+            lines.append(f"Details: {detail.strip()[:300]}")
+        _send("\n".join(lines))
 
 
 def health_report(report: str, failed: bool, cfg: dict | None = None) -> None:
     """Daily status. Sent every day (not only on failure) when owner_feed.daily_health_report is true."""
     if failed or _enabled("daily_health_report", cfg):
-        _send(("ACTION NEEDED\n" if failed else "") + report)
+        _send(("🔴 ACTION NEEDED · health check\n\n" if failed else "🟢 HEALTH · daily report\n\n") + report)
 
 
 def message(text: str) -> None:
@@ -89,10 +144,28 @@ def send_log(path: Path, caption: str = "") -> bool:
         return False
 
 
+_LABELS = {"fetched": "Fetched", "new": "New", "stored": "Stored", "published": "Posted", "needs_approval": "Awaiting you",
+           "publish_failed": "Failed", "skipped": "Skipped", "held": "Held", "duplicate": "Duplicates",
+           "retried": "Retried", "cleaned": "Cleaned from DB", "over_daily_limit": "Over daily limit",
+           "handled": "Taps handled", "errors": "Errors"}
+
+
+def format_run_summary(name: str, status: str, summary: dict) -> str:
+    """Caption for the log file: status line, then short labelled numbers."""
+    icon = "🟢" if status == "ok" else "🔴"
+    parts = [f"{_LABELS[k]} {v}" for k, v in summary.items() if k in _LABELS and v not in (0, "", None)]
+    text = f"{icon} {name.upper()} · {status}"
+    if parts:
+        text += "\n" + " · ".join(parts)
+    if summary.get("ai_error"):
+        text += f"\nAI: {str(summary['ai_error'])[:120]}"
+    return text
+
+
 def draft_preview(headline: str, body: str, lane: str, reason: str, sources: list[str],
                   draft_id: int | None = None) -> None:
-    """A draft that needs human review. NOT posted until you tap Approve (when draft_id is known)."""
-    text = (f"DRAFT for review (not posted)\nLane: {lane.upper()} ({reason})\n\n{headline}\n\n{body}"
+    """A draft that needs a human decision. Not posted until you tap Approve."""
+    text = (f"🔴 NEEDS YOUR APPROVAL · {lane.upper()}\nWhy: {reason}\n\n{headline}\n\n{body}"
             f"\n\nSource: {', '.join(sources)}")[:3900]
     if draft_id is None:
         _send(text)

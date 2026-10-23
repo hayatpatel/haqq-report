@@ -159,6 +159,20 @@ def cmd_card_test(_args) -> int:
     return 0 if rl.status == "ok" else 1
 
 
+def cmd_cleanup(_args) -> int:
+    from . import cleanup
+    from .config import load_config
+    from .runlog import RunLog
+
+    store = _store_or_none()
+    with RunLog("cleanup", store) as rl:
+        if store is None:
+            rl.fail("Supabase not configured")
+        else:
+            rl.summary["cleaned"] = sum(cleanup.run(store, load_config()).values())
+    return 0 if rl.status == "ok" else 1
+
+
 def cmd_health(_args) -> int:
     from .runlog import RunLog
 
@@ -367,6 +381,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("corrections").set_defaults(fn=cmd_corrections)
     sub.add_parser("health").set_defaults(fn=cmd_health)
     sub.add_parser("approvals").set_defaults(fn=cmd_approvals)
+    sub.add_parser("cleanup").set_defaults(fn=cmd_cleanup)
     sub.add_parser("card-test").set_defaults(fn=cmd_card_test)
     p = sub.add_parser("test-post")
     p.add_argument("platform", choices=["facebook", "instagram", "threads", "all"])

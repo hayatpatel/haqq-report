@@ -293,3 +293,11 @@ To pause: set the repository variable `BOT_ENABLED` to `false`, or set `mode` ba
 Every post follows one template (`newsbot/template.py`): headline, body trimmed to fit, `Source: <outlet>`, hashtags. Limits per platform are in `config.json` (`caption_limits`; Threads is 480 to stay under its 500 cap). Facebook keeps the source link in a first comment; if the Page token lacks `pages_manage_engagement`, the link is added to the caption instead and the post still counts as posted.
 
 Every post carries a branded 1080x1080 card made by `newsbot/cards.py` (our own design, not third-party photos), uploaded to a public Supabase Storage bucket named `cards` (created automatically; `db/migrations/004_cards_bucket.sql` is the manual fallback). If a card cannot be made the post goes out as text. Run Actions, **card-test** to see the template and card in your Telegram.
+
+## No duplicates, freshness, cleanup, notifications
+
+- **Duplicates:** a story URL is processed once (`articles`); a new draft whose headline is similar to any draft from the last 72 hours is skipped; a draft is claimed in the database before posting so two jobs can never both post it; `db/migrations/005_posts_unique.sql` adds a unique index on (draft, platform).
+- **Freshness:** only stories published in the last 48 hours are drafted or posted (`limits.INGEST_MAX_AGE_HOURS`); undated items are ignored.
+- **Cleanup:** every run deletes articles, claims, drafts and posts older than 72 hours (`retention.hours`) and run logs older than 7 days. Sources, creators, corrections, tokens and settings are kept. Manual run: `python -m newsbot cleanup`.
+- **Telegram:** one status line (✅ posted, ⚠️ partly posted, ❌ not posted, 🔴 needs approval, 🟢 run ok), the headline, one line per platform, and a plain-words "Fix:" when something failed.
+- **Instagram** is on; it needs the card image, so a card failure means Instagram is skipped for that story while Facebook and Threads still post.

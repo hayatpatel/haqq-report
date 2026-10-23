@@ -67,5 +67,7 @@ def within_window(articles: Iterable[Article], now: datetime | None = None, cfg:
     cfg = cfg or load_config()
     now = now or datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=cfg["limits"]["INGEST_MAX_AGE_HOURS"])
-    # Articles without a date are kept; the scorer treats them as fresh.
-    return [a for a in articles if a.published is None or a.published >= cutoff]
+    # Undated items are dropped: we cannot prove they are under 48h old, and after the 72h database cleanup
+    # they would come back as "new" again and be posted twice.
+    keep_undated = cfg.get("ingest", {}).get("keep_undated", False)
+    return [a for a in articles if (a.published is None and keep_undated) or (a.published and a.published >= cutoff)]

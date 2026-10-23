@@ -33,7 +33,7 @@ class FakeStore:
 
 
 def outcome(url, action="needs_approval"):
-    d = Draft(headline="H", body="UN OCHA said x.", lane=Lane.AMBER, source_urls=[url])
+    d = Draft(headline=["Floods hit Sudan camps", "Aid convoy reaches Gaza", "Court hears Kashmir petition", "Yemen ceasefire talks", "Mosque vandalised in Britain"][int(url[-1]) % 5], body="UN OCHA said x.", lane=Lane.AMBER, source_urls=[url])
     return pipeline.Outcome(url, action, "review mode", d)
 
 

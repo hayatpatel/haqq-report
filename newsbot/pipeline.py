@@ -153,5 +153,6 @@ def publish_draft(draft: Draft, image_url: str = "", *, dry_run: bool = True,
             results.append(PublishResult(platform, ok=True, skipped=True, extra={"dry_run": True}))
             continue
         results.append(run_platform(platform, job, alert=alert))
-    owner_feed.post_results(draft.headline, results, dry_run=dry_run, cfg=cfg)
+    owner_feed.post_results(draft.headline, results, dry_run=dry_run, cfg=cfg, lane=draft.lane.value,
+                            source=template.source_name(draft.source_urls[0], cfg) if draft.source_urls else "")
     return results

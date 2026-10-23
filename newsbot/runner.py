@@ -9,7 +9,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
-from . import ai, ingest, owner_feed, pipeline, scoring, sources
+from . import ai, cleanup, duplicates, ingest, owner_feed, pipeline, scoring, sources
 from .config import load_config
 from .models import Article, Draft, Lane
 
@@ -91,8 +91,10 @@ def publish_ready(store, draft_id, draft, cfg: dict, stats: dict, final: bool = 
             stats["over_daily_limit"] = stats.get("over_daily_limit", 0) + 1
             return
         now = datetime.now(timezone.utc).isoformat()
-        store.update("drafts", {"id": draft_id}, {"status": "approved", "decided_at": now})  # claim first
-        results = pipeline.publish_draft(draft, "", dry_run=False, alert=owner_feed.message, cfg=cfg)
+        if not store.claim("drafts", draft_id, "pending", "approved", {"decided_at": now}):
+            stats["already_claimed"] = stats.get("already_claimed", 0) + 1  # another job is posting it: never twice
+            return
+        results = pipeline.publish_draft(draft, "", dry_run=False, cfg=cfg)
         done = [r for r in results if r.ok and not r.skipped]
         for r in done:
             store.insert("posts", {"draft_id": draft_id, "platform": r.platform, "platform_post_id": r.post_id})
@@ -106,11 +108,11 @@ def publish_ready(store, draft_id, draft, cfg: dict, stats: dict, final: bool = 
 
 
 def retry_unposted(store, cfg: dict, stats: dict, limit: int = 3) -> None:
-    """Auto mode: one more try for Green/Amber drafts from the last 24h that never reached any platform."""
+    """Auto mode: one more try for Green/Amber drafts from the last 48h that never reached any platform."""
     if store is None or cfg.get("mode") != "auto":
         return
     try:
-        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        since = (datetime.now(timezone.utc) - timedelta(hours=cfg["limits"]["INGEST_MAX_AGE_HOURS"])).isoformat()
         rows = store.select_raw("drafts", {"status": "eq.pending", "lane": "in.(green,amber)",
                                            "created_at": f"gte.{since}", "order": "created_at.asc", "limit": str(limit)})
         for row in rows:
@@ -181,7 +183,12 @@ def run(priority: bool = False, *, store=None, ai_call: Callable[[str], str] | N
     stats["new"] = len(fresh)
     log.info("%d fetched, %d new after dedupe and window", len(fetched), len(fresh))
 
+    try:
+        stats["cleaned"] = sum(cleanup.run(store, cfg).values())
+    except Exception as exc:  # noqa: BLE001 - housekeeping must never stop a run
+        log.warning("cleanup skipped (%s)", type(exc).__name__)
     retry_unposted(store, cfg, stats)
+    recent = duplicates.recent_headlines(store, cfg.get("retention", {}).get("hours", 72))
 
     ids: dict[str, int | None] = {}
     for article in fresh:  # store every new article, even those we do not draft this run
@@ -202,6 +209,13 @@ def run(priority: bool = False, *, store=None, ai_call: Callable[[str], str] | N
             continue
         log.info("%s -> %s %s", article.url, outcome.action, outcome.reason)
         mark_processed(store, ids.get(article.url))
+        if outcome.draft is not None:
+            twin = duplicates.find_duplicate(outcome.draft.headline, recent)
+            if twin:
+                stats["duplicate"] = stats.get("duplicate", 0) + 1
+                log.info("duplicate story skipped: %r is like %r", outcome.draft.headline[:70], twin[:70])
+                continue
+            recent.append(outcome.draft.headline)
         stats[outcome.action] = stats.get(outcome.action, 0) + 1
         if outcome.draft is None:
             continue
