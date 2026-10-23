@@ -26,3 +26,14 @@ jobs:
           curl -fsS -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $SUPABASE_KEY" \
             "$SUPABASE_URL/rest/v1/settings?select=key&limit=1" > /dev/null
           echo "Supabase reachable"
+
+      - name: Tell the owner on Telegram if this run failed
+        if: ${{ failure() }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OWNER_ID: ${{ secrets.TELEGRAM_OWNER_ID }}
+        run: |
+          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
+          curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_OWNER_ID}" \
+            --data-urlencode "text=ERROR: workflow '${{ github.workflow }}' failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" > /dev/null

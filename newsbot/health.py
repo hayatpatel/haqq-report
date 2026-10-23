@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 from .config import MissingSecret, load_config, optional_env
 from .publish import meta_fb, tokens
 from .publish.base import PublishError
-from .publish.telegram_channel import alert_owner
+from . import owner_feed
+from .publish.telegram_channel import alert_owner  # noqa: F401 (kept for callers/tests)
 
 
 def check_facebook() -> str:
@@ -54,9 +55,5 @@ def run(store=None, now: datetime | None = None) -> tuple[list[str], bool]:
     ]
     failed = any(line.startswith("FAIL") for line in lines)
     report = "Haqq Report token health\n" + "\n".join(lines)
-    try:
-        if failed or any(line.startswith("WARN") for line in lines):
-            alert_owner(report)
-    except Exception:  # noqa: BLE001
-        pass
+    owner_feed.health_report(report, failed or any(line.startswith("WARN") for line in lines))
     return lines, failed

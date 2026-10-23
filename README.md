@@ -149,7 +149,7 @@ or break another.
 | Instagram | `IG_APP_ID`, `IG_APP_SECRET`, `IG_USER_ID`, `IG_TOKEN` (60 days, refreshable; Instagram's own ID/secret, not the main app's) |
 | Threads | `TH_APP_ID`, `TH_APP_SECRET`, `TH_USER_ID`, `TH_TOKEN` (60 days, refreshable; Threads' own ID/secret) |
 | Token refresh | `GH_PAT_SECRETS` (fine-grained PAT, secrets:write on this repo only) |
-| Telegram | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_ID`, `TELEGRAM_CHANNEL_ID`, `TELEGRAM_WEBHOOK_SECRET` |
+| Telegram (private owner feed) | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_ID`, `TELEGRAM_WEBHOOK_SECRET` (only for the approval Worker). `TELEGRAM_CHANNEL_ID` is **optional**: leave it empty unless you later turn on a public channel |
 | Bluesky | `BSKY_HANDLE`, `BSKY_APP_PASSWORD` |
 | Supabase | `SUPABASE_URL`, `SUPABASE_KEY` |
 | AI | `GROQ_API_KEY`, `GEMINI_API_KEY` |
@@ -174,6 +174,21 @@ GitHub.
 Meta setup (one app `HR-Publisher`, three use cases, no Page-to-Instagram link) is documented step by step in
 [`docs/meta-setup.md`](docs/meta-setup.md). Rotate any credential that has ever been pasted into a chat,
 ticket or file outside the secret stores.
+
+## Telegram owner feed (private)
+
+No public channel is needed. The bot sends everything to your own private chat with it
+(`TELEGRAM_OWNER_ID`; start the chat once by sending the bot a message):
+
+| Message | When | Switch in `config.json` (`owner_feed`) |
+|---|---|---|
+| Post summary: which platforms published (or would have, in a dry run) and which failed | Every post | `posts` |
+| `ERROR in ...` with the detail | A pipeline error | `errors` |
+| Daily token and platform health report | Daily 18:10 IST; a failure is always sent | `daily_health_report` |
+| `ERROR: workflow '...' failed` with a link to the run | Any scheduled workflow fails | always on |
+
+The feed never raises: if Telegram is down or unconfigured, publishing carries on. Weekly insights and a
+per-post log in the database are still on the roadmap.
 
 ## GitHub Actions
 

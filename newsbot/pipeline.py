@@ -15,6 +15,7 @@ from .config import load_config, platform_enabled
 from .models import Article, Draft, Lane, Tier
 from .publish import bluesky, instagram, meta_fb, threads
 from .publish import site as site_pub
+from . import owner_feed
 from .publish import telegram_channel
 from .publish.base import PublishResult, run_platform
 
@@ -143,4 +144,5 @@ def publish_draft(draft: Draft, image_url: str = "", *, dry_run: bool = True,
             results.append(PublishResult(platform, ok=True, skipped=True, extra={"dry_run": True}))
             continue
         results.append(run_platform(platform, job, alert=alert))
+    owner_feed.post_results(draft.headline, results, dry_run=dry_run, cfg=cfg)
     return results

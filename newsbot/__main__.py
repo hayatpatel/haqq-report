@@ -23,7 +23,7 @@ SECRET_GROUPS = {
     "instagram": ["IG_APP_ID", "IG_APP_SECRET", "IG_USER_ID", "IG_TOKEN"],
     "threads": ["TH_APP_ID", "TH_APP_SECRET", "TH_USER_ID", "TH_TOKEN"],
     "token refresh": ["GH_PAT_SECRETS"],
-    "telegram": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_OWNER_ID", "TELEGRAM_CHANNEL_ID"],
+    "telegram (owner feed)": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_OWNER_ID"],
     "bluesky": ["BSKY_HANDLE", "BSKY_APP_PASSWORD"],
     "supabase": ["SUPABASE_URL", "SUPABASE_KEY"],
     "ai": ["GROQ_API_KEY", "GEMINI_API_KEY"],
@@ -88,6 +88,13 @@ def cmd_health(_args) -> int:
     return 1 if failed else 0
 
 
+def cmd_notify(args) -> int:
+    """Send a free-form message to the owner's private Telegram chat (used by workflow failure steps)."""
+    from . import owner_feed
+    owner_feed.message(" ".join(args.text))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="newsbot", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -98,6 +105,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("calendar").set_defaults(fn=cmd_calendar)
     sub.add_parser("corrections").set_defaults(fn=cmd_corrections)
     sub.add_parser("health").set_defaults(fn=cmd_health)
+    p = sub.add_parser("notify")
+    p.add_argument("text", nargs="+")
+    p.set_defaults(fn=cmd_notify)
     args = parser.parse_args(argv)
     return args.fn(args)
 
