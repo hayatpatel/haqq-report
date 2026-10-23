@@ -47,3 +47,33 @@ def test_db_check_all_ok(monkeypatch, capsys):
     monkeypatch.setattr(owner_feed, "alert_owner", lambda t: None)
     monkeypatch.setattr(store.requests, "get", lambda url, **kw: MagicMock())
     assert cli.main(["db-check"]) == 0 and "ALL OK" in capsys.readouterr().out
+
+
+def test_preflight_flags_bad_secrets_without_printing_values(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://supabase.com/dashboard/project/abc")
+    monkeypatch.setenv("SUPABASE_KEY", "sb_publishable_zzzzzzzz ")
+    notes = " | ".join(cli._db_preflight())
+    assert "does not look like" in notes and "PUBLISHABLE" in notes and "space" in notes
+    assert "zzzzzzzz" not in notes and "dashboard" not in notes
+
+
+def test_preflight_good_secrets_are_quiet(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://abcdefgh.supabase.co")
+    monkeypatch.setenv("SUPABASE_KEY", "sb_secret_abcdef")
+    notes = cli._db_preflight()
+    assert notes == ["SUPABASE_KEY: new secret key (sb_secret_), 16 characters"]
+
+
+def test_db_check_emits_github_annotations(monkeypatch, capsys, tmp_path):
+    monkeypatch.setenv("SUPABASE_URL", "https://abcdefgh.supabase.co"); monkeypatch.setenv("SUPABASE_KEY", "sb_secret_abc")
+    monkeypatch.setenv("GITHUB_ACTIONS", "true"); monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "s.md"))
+    monkeypatch.setattr(owner_feed, "alert_owner", lambda t: None)
+
+    def fake_get(url, **kw):
+        r = MagicMock()
+        r.raise_for_status.side_effect = _http_error(401, {"message": "Invalid API key", "code": "x"})
+        return r
+    monkeypatch.setattr(store.requests, "get", fake_get)
+    assert cli.main(["db-check"]) == 1
+    assert "::error title=db-check tokens::HTTP 401" in capsys.readouterr().out
+    assert "DB check" in (tmp_path / "s.md").read_text()
