@@ -4,7 +4,7 @@
     "handle": "haqqreport",
     "tagline": "Facts first. Sources named. Corrections public."
   },
-  "mode": "review",
+  "mode": "auto",
   "mode_notes": "review = every draft goes to Telegram for approval (first 4 weeks). auto = Green and Amber post automatically, Red always needs approval.",
   "run": {
     "max_articles": 8,

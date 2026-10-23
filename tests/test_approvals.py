@@ -78,3 +78,31 @@ def test_failed_publish_returns_to_pending(monkeypatch):
 def test_reject():
     st = Store()
     assert "rejected" in approvals.handle(st, tap("r:7"), CFG) and st.draft["status"] == "rejected"
+
+
+def test_auto_publish_records_post_and_respects_daily_cap(monkeypatch):
+    from newsbot import runner
+    from newsbot.models import Draft, Lane
+
+    monkeypatch.setattr(pipeline, "publish_draft",
+                        lambda *a, **k: [PublishResult("facebook", ok=True, post_id="p9")])
+    d = Draft(headline="H", body="b", lane=Lane.GREEN)
+    st, stats = Store(), {}
+    runner.publish_ready(st, 7, d, CFG, stats)
+    assert stats["published"] == 1 and st.draft["status"] == "posted"
+    assert st.inserts[0][1]["platform_post_id"] == "p9"
+
+    monkeypatch.setattr(pipeline, "publish_draft", lambda *a, **k: pytest.fail("cap exceeded"))
+    capped, stats = Store(posted_today=2), {}
+    runner.publish_ready(capped, 7, d, CFG, stats)
+    assert stats["over_daily_limit"] == 1 and capped.draft["status"] == "pending"
+
+
+def test_auto_publish_never_posts_without_database(monkeypatch):
+    from newsbot import runner
+    from newsbot.models import Draft
+
+    monkeypatch.setattr(pipeline, "publish_draft", lambda *a, **k: pytest.fail("no DB means no cap check"))
+    stats = {}
+    runner.publish_ready(None, None, Draft(headline="H", body="b"), CFG, stats)
+    assert stats["publish_blocked"] == 1

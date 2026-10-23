@@ -275,10 +275,15 @@ affected secret immediately.
 - **Casualty figures** must name their source in the same sentence (OCHA, UNRWA, a ministry, a named outlet). "The agency said" fails the safety check.
 - **Cleanup:** headlines are plain text (no markdown or quotes). Drafts about death, injury or disaster have all emoji removed.
 
-## Going live (review mode)
+## Going live (auto mode)
 
-Nothing posts by itself. The hourly run sends each draft to your private Telegram chat with **Approve and post** and **Reject** buttons. The `approvals` workflow checks for your taps every 5 minutes and posts approved drafts to Facebook and Threads (Instagram stays off until image cards exist).
+`mode` is `auto` in `config.json`. Each hourly run drafts stories, checks them, and then:
 
-Safeguards: only your Telegram ID can approve; each draft can be acted on once; drafts older than 24 hours cannot be posted; `MAX_POSTS_PER_DAY` is enforced; a failed post goes back to pending and the error is sent to you.
+- **Green and Amber** stories post straight to Facebook and Threads, are recorded in `posts`, and appear in your Telegram feed with the platform post ids. Instagram stays off until image cards exist.
+- **Red** stories (sensitive, designated-group mentions, graphic, and so on) are never auto-posted. They arrive in Telegram with **Approve and post** and **Reject** buttons, handled by the `approvals` workflow every 5 minutes.
 
-To start: set the repository variable `BOT_ENABLED` to `true` (Settings, Secrets and variables, Actions, Variables). To stop: set it to `false`. Allow up to 5 minutes between your tap and the post.
+Safeguards: `MAX_POSTS_PER_DAY` (10) is enforced; nothing posts if the database is unreachable (the cap could not be checked); every claim needs a source, casualty figures need a named source, and a failed safety check twice means the story is skipped.
+
+Reviewing later: use Telegram or the platform itself. Delete a post on the platform and, if it was wrong, add a public correction (`corrections` workflow).
+
+To pause: set the repository variable `BOT_ENABLED` to `false`, or set `mode` back to `review` in `config.json`.

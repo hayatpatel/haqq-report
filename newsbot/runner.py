@@ -78,6 +78,33 @@ def save_draft(store, article_id: int | None, outcome: pipeline.Outcome) -> int 
         return None
 
 
+def publish_ready(store, draft_id, draft, cfg: dict, stats: dict) -> None:
+    """Auto mode: post a Green/Amber draft live, record it, respect the daily cap. Needs the database."""
+    from . import approvals
+
+    if store is None or draft_id is None:
+        stats["publish_blocked"] = stats.get("publish_blocked", 0) + 1
+        owner_feed.error("auto-post", "draft not posted: it could not be saved, so the daily cap cannot be checked", cfg)
+        return
+    try:
+        if approvals._posted_today(store) >= cfg["limits"]["MAX_POSTS_PER_DAY"]:
+            stats["over_daily_limit"] = stats.get("over_daily_limit", 0) + 1
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        store.update("drafts", {"id": draft_id}, {"status": "approved", "decided_at": now})  # claim first
+        results = pipeline.publish_draft(draft, "", dry_run=False, alert=owner_feed.message, cfg=cfg)
+        done = [r for r in results if r.ok and not r.skipped]
+        for r in done:
+            store.insert("posts", {"draft_id": draft_id, "platform": r.platform, "platform_post_id": r.post_id})
+        store.update("drafts", {"id": draft_id}, {"status": "posted" if done else "pending"})
+        stats["published"] = stats.get("published", 0) + (1 if done else 0)
+        if not done:
+            stats["publish_failed"] = stats.get("publish_failed", 0) + 1
+    except Exception as exc:  # noqa: BLE001 - never lose the rest of the run
+        log.exception("auto-post failed (%s)", type(exc).__name__)
+        stats["publish_failed"] = stats.get("publish_failed", 0) + 1
+
+
 def on_mission(a: Article, cfg: dict) -> bool:
     text = f"{a.title} {a.summary}".lower()
     return scoring.has_watch_topic(text, cfg) or any(k in text for k in cfg.get("mission_keywords", []))
@@ -163,5 +190,5 @@ def run(priority: bool = False, *, store=None, ai_call: Callable[[str], str] | N
             owner_feed.draft_preview(d.headline, d.body, d.lane.value, outcome.reason, d.source_urls, draft_id)
             stats["previews_sent"] += 1
         elif outcome.action == "ready":
-            pipeline.publish_draft(outcome.draft, "", dry_run=True, cfg=cfg)
+            publish_ready(store, draft_id, outcome.draft, cfg, stats)
     return stats

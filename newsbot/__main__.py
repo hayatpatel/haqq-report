@@ -90,7 +90,7 @@ def _store_or_none():
 
 
 def cmd_run(args) -> int:
-    """Full dry run: fetch, store, draft, review. Publishes nothing. Log goes to file, Supabase and Telegram."""
+    """Fetch, store, draft. Review mode: previews only. Auto mode: Green and Amber post live, Red waits for a tap. Log goes to file, Supabase and Telegram."""
     from . import runner
     from .runlog import RunLog
 
@@ -321,7 +321,7 @@ def cmd_notify(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="newsbot", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("run", help="full dry run: fetch, store, draft, review (publishes nothing)")
+    p = sub.add_parser("run", help="fetch, store, draft; auto mode posts Green and Amber live")
     p.add_argument("--priority", action="store_true")
     p.set_defaults(fn=cmd_run)
     sub.add_parser("check-config").set_defaults(fn=cmd_check_config)
