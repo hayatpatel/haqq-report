@@ -26,7 +26,7 @@ class EmptyStore:
 def test_missing_tables_reported_not_crashed(monkeypatch):
     monkeypatch.setenv("IG_TOKEN", "x" * 20)
     line = health.check_age_based("instagram", "instagram", lambda: "n", "IG_TOKEN", BrokenStore(), NOW)
-    assert line.startswith("FAIL") and "db/schema.sql" in line
+    assert line.startswith("FAIL") and "db-check" in line
 
 
 def test_first_run_records_today_and_is_ok(monkeypatch):

@@ -23,7 +23,9 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
           if [ -z "$SUPABASE_URL" ]; then echo "Supabase not configured yet"; exit 0; fi
-          curl -fsS -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $SUPABASE_KEY" \
+          # new-style sb_ keys go in apikey only; legacy JWT keys also need the Bearer header
+          auth=(); case "$SUPABASE_KEY" in sb_*) ;; *) auth=(-H "Authorization: Bearer $SUPABASE_KEY");; esac
+          curl -fsS -H "apikey: $SUPABASE_KEY" "${auth[@]}" \
             "$SUPABASE_URL/rest/v1/settings?select=key&limit=1" > /dev/null
           echo "Supabase reachable"
 

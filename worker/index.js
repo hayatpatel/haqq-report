@@ -20,7 +20,8 @@ async function sb(env, path, init = {}) {
     ...init,
     headers: {
       apikey: env.SUPABASE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_KEY}`,
+      // New-style sb_ keys are not JWTs: apikey only. Legacy JWT keys also need Bearer.
+      ...(env.SUPABASE_KEY.startsWith("sb_") ? {} : { Authorization: `Bearer ${env.SUPABASE_KEY}` }),
       "Content-Type": "application/json",
       ...(init.headers || {}),
     },
