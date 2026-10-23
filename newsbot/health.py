@@ -15,14 +15,22 @@ from .publish.telegram_channel import alert_owner  # noqa: F401 (kept for caller
 
 
 def check_facebook() -> str:
+    from . import fbtoken
     try:
         data = meta_fb.debug_page_token()
     except (MissingSecret, PublishError) as exc:
         return f"FAIL facebook: {exc}"
     if not data.get("is_valid", False):
-        return "FAIL facebook: token invalid"
-    expires = data.get("expires_at", 0)
-    return "OK facebook: token valid" + (" (never expires)" if not expires else f" (expires_at={expires})")
+        return "FAIL facebook: token invalid (send /fbtoken to the bot to replace it)"
+    exp_text, never = fbtoken.expiry_text(data)
+    scopes = data.get("scopes") or []
+    missing = [p for p in fbtoken.MUST + fbtoken.SHOULD if p not in scopes]
+    line = f"token valid, expires: {exp_text}"
+    if missing:
+        line += "; missing permissions: " + ", ".join(missing)
+    if not never or any(p in missing for p in fbtoken.MUST):
+        return "FAIL facebook: " + line
+    return ("WARN" if missing else "OK") + " facebook: " + line
 
 
 def check_age_based(platform: str, label: str, refresh_fn, secret_name: str, store, now: datetime) -> str:

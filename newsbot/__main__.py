@@ -83,8 +83,11 @@ def cmd_corrections(_args) -> int:
 
 def _store_or_none():
     try:
+        from . import fbtoken
         from .store import Store
-        return Store()
+        store = Store()
+        fbtoken.apply_overrides(store)  # a token sent via Telegram overrides the GitHub secret
+        return store
     except Exception:  # noqa: BLE001
         return None
 

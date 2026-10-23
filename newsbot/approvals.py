@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from . import owner_feed, pipeline
+from . import fbtoken, owner_feed, pipeline
 from .config import load_config, optional_env
 from .models import Draft, Lane
 from .publish.telegram_channel import _call
@@ -96,6 +96,32 @@ def handle(store, cb: dict, cfg: dict) -> str:
     return f"draft {raw_id} NOT posted: {errors}"
 
 
+def handle_message(store, msg: dict) -> str:
+    """Owner commands typed to the bot: /fbtoken, /tokenstatus, /help."""
+    owner = str(optional_env("TELEGRAM_OWNER_ID"))
+    if str(msg.get("from", {}).get("id")) != owner or str(msg.get("chat", {}).get("id")) != owner:
+        return "ignored: not the owner"
+    text = (msg.get("text") or "").strip()
+    cmd, _, rest = text.partition(" ")
+    cmd = cmd.split("@")[0].lower()
+    if cmd == "/fbtoken":
+        reply = fbtoken.update_from_text(rest, store)
+        if rest.strip() and rest.strip().lower() != "reset":  # the message holds a secret: remove it
+            try:
+                _call("deleteMessage", {"chat_id": msg["chat"]["id"], "message_id": msg["message_id"]})
+            except Exception:  # noqa: BLE001
+                reply += "\nI could not delete your message. Please delete it yourself."
+        owner_feed.message(reply)
+        return "fbtoken: " + reply.splitlines()[0]
+    if cmd == "/tokenstatus":
+        owner_feed.message(fbtoken.status(store))
+        return "tokenstatus sent"
+    if cmd in ("/help", "/start"):
+        owner_feed.message("Commands: /fbtoken (update the Facebook token), /tokenstatus (check it).\n\n" + fbtoken.HELP)
+        return "help sent"
+    return "ignored: not a command"
+
+
 def poll(store, cfg: dict | None = None) -> dict:
     cfg = cfg or load_config()
     stats = {"updates": 0, "handled": 0, "errors": 0, "results": []}
@@ -105,12 +131,20 @@ def poll(store, cfg: dict | None = None) -> dict:
         log.warning("deleteWebhook failed")
     rows = store.select_raw("settings", {"key": "eq.telegram_offset"})
     offset = int(rows[0]["value"]) if rows else 0
-    updates = _call("getUpdates", {"offset": offset, "timeout": 0, "allowed_updates": '["callback_query"]'})
+    updates = _call("getUpdates", {"offset": offset, "timeout": 0, "allowed_updates": '["callback_query","message"]'})
     stats["updates"] = len(updates)
     for u in updates:
         offset = max(offset, u["update_id"] + 1)
         cb = u.get("callback_query")
         if not cb:
+            msg = u.get("message")
+            if msg and str(msg.get("text", "")).startswith("/"):
+                try:
+                    stats["results"].append(handle_message(store, msg))
+                    stats["handled"] += 1
+                except Exception as exc:  # noqa: BLE001
+                    stats["errors"] += 1
+                    log.exception("command failed (%s)", type(exc).__name__)
             continue
         try:
             stats["results"].append(handle(store, cb, cfg))

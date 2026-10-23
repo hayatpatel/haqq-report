@@ -65,6 +65,29 @@ def delete_post(post_id: str) -> bool:
     return bool(out.get("success", True))
 
 
+def debug_token(token: str) -> dict:
+    """Inspect ANY token (needs FB_APP_ID and FB_APP_SECRET): validity, type, expiry, scopes, profile."""
+    env = require_env("FB_APP_ID", "FB_APP_SECRET")
+    out = graph_request("GET", f"{_base()}/debug_token", params={
+        "input_token": token, "access_token": f"{env['FB_APP_ID']}|{env['FB_APP_SECRET']}"})
+    return out.get("data", out)
+
+
+def exchange_long_lived(user_token: str) -> str:
+    env = require_env("FB_APP_ID", "FB_APP_SECRET")
+    out = graph_request("GET", f"{_base()}/oauth/access_token", params={
+        "grant_type": "fb_exchange_token", "client_id": env["FB_APP_ID"], "client_secret": env["FB_APP_SECRET"],
+        "fb_exchange_token": user_token})
+    return out["access_token"]
+
+
+def page_from_user_token(user_token: str, page_id: str) -> dict | None:
+    """The Page entry (id, name, access_token) for page_id among the pages this user manages."""
+    out = graph_request("GET", f"{_base()}/me/accounts", params={
+        "fields": "id,name,access_token", "limit": 100, "access_token": user_token})
+    return next((p for p in out.get("data", []) if p.get("id") == page_id), None)
+
+
 def debug_page_token() -> dict:
     """Check the Page token (needs FB_APP_ID and FB_APP_SECRET)."""
     env = require_env("FB_APP_ID", "FB_APP_SECRET", "FB_PAGE_TOKEN")
