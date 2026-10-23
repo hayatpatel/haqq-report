@@ -9,7 +9,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
-from . import ai, ingest, owner_feed, pipeline, sources
+from . import ai, ingest, owner_feed, pipeline, scoring, sources
 from .config import load_config
 from .models import Article
 
@@ -76,6 +76,36 @@ def save_draft(store, article_id: int | None, outcome: pipeline.Outcome) -> None
         log.warning("draft/claims not saved (%s)", type(exc).__name__)
 
 
+def on_mission(a: Article, cfg: dict) -> bool:
+    text = f"{a.title} {a.summary}".lower()
+    return scoring.has_watch_topic(text, cfg) or any(k in text for k in cfg.get("mission_keywords", []))
+
+
+def select_for_run(fresh: list[Article], cfg: dict) -> list[Article]:
+    """Choose what to draft: mission topics first (best tier, newest), few per source, a small off-mission quota."""
+    limits = cfg.get("run", {})
+    cap, per_source = limits.get("max_articles", 8), limits.get("max_per_source", 3)
+    off_max = limits.get("off_mission_max", 2)
+    epoch = datetime.min.replace(tzinfo=timezone.utc)
+
+    def order(a: Article):
+        return (-a.tier.rank, -(a.published or epoch).timestamp())
+
+    on = sorted((a for a in fresh if on_mission(a, cfg)), key=order)
+    off = sorted((a for a in fresh if not on_mission(a, cfg)), key=order)
+    picked, counts = [], {}
+    for a in on + off[:off_max]:
+        if len(picked) >= cap:
+            break
+        if counts.get(a.source_name, 0) >= per_source:
+            continue
+        counts[a.source_name] = counts.get(a.source_name, 0) + 1
+        picked.append(a)
+    log.info("selected %d of %d new: %d on-mission, %d off-mission", len(picked), len(fresh),
+             sum(on_mission(a, cfg) for a in picked), sum(not on_mission(a, cfg) for a in picked))
+    return picked
+
+
 def fetch_all(priority: bool) -> list[Article]:
     found: list[Article] = []
     for src in sources.feeds(only_priority=priority):
@@ -109,7 +139,7 @@ def run(priority: bool = False, *, store=None, ai_call: Callable[[str], str] | N
         if ids[article.url]:
             stats["stored"] += 1
 
-    for article in fresh[: limits.get("max_articles", 8)]:
+    for article in select_for_run(fresh, cfg):
         try:
             outcome = pipeline.process_article(article, ai_call, cfg)
         except ai.AIUnavailable as exc:

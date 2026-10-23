@@ -46,6 +46,32 @@ QUOTE_ATTRIBUTION_HINTS = (
     "said", "says", "stated", "found", "ruled", "concluded", "described", "alleged",
     "according to", "reported", "warned", "determined", "has accused", "accused",
 )
+# Institutions that count as a NAMED source. "the agency", "officials", "authorities" do not.
+NAMED_SOURCE_RE = re.compile(
+    r"\b(OCHA|UNRWA|UNICEF|WHO|WFP|UNHCR|OHCHR|UN News|United Nations|ICJ|ICC|Ministry|Amnesty|Human Rights Watch|"
+    r"B'Tselem|Reuters|Associated Press|BBC|Al Jazeera|Anadolu|Middle East Eye|Civil Defence|Red Cross|Red Crescent)\b")
+
+_EMOJI_RE = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200D\U0001F1E6-\U0001F1FF]")
+_SENSITIVE_RE = re.compile(
+    r"\b(kill\w*|dead|deaths?|died|dies|dying|injur\w*|wound\w*|casualt\w*|victims?|massacre\w*|flood\w*|"
+    r"earthquake|outbreak|epidemic|famine|starv\w*|attack\w*|strikes?|bomb\w*|war|missing|displaced)\b", re.IGNORECASE)
+
+
+def is_sensitive(text: str) -> bool:
+    """Death, injury or disaster: no emoji, no light tone."""
+    return bool(_SENSITIVE_RE.search(text or ""))
+
+
+def strip_emoji(text: str) -> str:
+    return re.sub(r"[ \t]{2,}", " ", _EMOJI_RE.sub("", text or "")).rstrip()
+
+
+def clean_headline(headline: str) -> str:
+    """Plain text headline: no markdown emphasis, heading marks or wrapping quotes."""
+    h = re.sub(r"[*_`#]+", "", headline or "").strip()
+    return h.strip("\"'“”‘’ ").strip()
+
+
 COLLECTIVE_BLAME_PATTERNS = [
     r"\ball (jews|muslims|christians|hindus|israelis|palestinians|arabs)\b",
     r"\b(jews|muslims|hindus|israelis|palestinians|arabs) are (all |always |inherently )?(evil|terrorists|animals|vermin|subhuman)\b",
@@ -145,7 +171,8 @@ def check_draft(draft: Draft, source_text: str = "", cfg: dict | None = None) ->
     # 5. Casualty figures need a named source in the same sentence.
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", full):
         if CASUALTY_FIGURE_RE.search(sentence):
-            attributed = any(h in sentence.lower() for h in QUOTE_ATTRIBUTION_HINTS) or any(
+            # A generic verb ("said", "reported") is not enough: the SOURCE must be named in the same sentence.
+            attributed = bool(NAMED_SOURCE_RE.search(sentence)) or any(
                 c.attribution and c.attribution.lower() in sentence.lower() for c in draft.claims
             )
             if not attributed:

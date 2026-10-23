@@ -50,8 +50,11 @@ def make_draft(article: Article, claims: list, label: str, ai_call: Callable[[st
     raw = ai_call(DRAFT_PROMPT.format(source=article.source_name, title=article.title,
                                       text=article.summary[:4000], label_rule=label_rule)).strip()
     headline, _, body = raw.partition("\n")
-    return Draft(headline=headline.strip(), body=(body.strip() or headline.strip()), claims=claims,
-                 source_urls=[article.url], label=label)
+    headline = safety.clean_headline(headline)
+    body = body.strip() or headline
+    if safety.is_sensitive(f"{headline} {body}"):  # dignity rule: no emoji on stories about death or disaster
+        headline, body = safety.strip_emoji(headline), safety.strip_emoji(body)
+    return Draft(headline=headline, body=body, claims=claims, source_urls=[article.url], label=label)
 
 
 def process_article(article: Article, ai_call: Callable[[str], str], cfg: dict | None = None) -> Outcome:

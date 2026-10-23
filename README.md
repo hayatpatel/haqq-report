@@ -267,3 +267,10 @@ the audience. Recovery steps (create `HR-Publisher-2`, re-add use cases and test
 
 Do not open a public issue for a leaked credential or vulnerability. Contact the maintainer directly, and rotate the
 affected secret immediately.
+
+
+## Draft quality rules
+
+- **What gets drafted:** each run picks on-mission stories first (`watch_topics` and `mission_keywords` in `config.json`), best source tier then newest, with at most `run.max_per_source` per source and `run.off_mission_max` off-topic stories.
+- **Casualty figures** must name their source in the same sentence (OCHA, UNRWA, a ministry, a named outlet). "The agency said" fails the safety check.
+- **Cleanup:** headlines are plain text (no markdown or quotes). Drafts about death, injury or disaster have all emoji removed.

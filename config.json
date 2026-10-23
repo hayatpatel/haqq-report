@@ -11,6 +11,8 @@
   "run": {
     "max_articles": 8,
     "max_telegram_drafts": 5,
+    "max_per_source": 3,
+    "off_mission_max": 2,
     "dedupe_days": 7
   },
 
@@ -55,6 +57,13 @@
     "sudan", "yemen", "syria", "lebanon", "afghanistan",
     "somalia", "rohingya", "kashmir", "xinjiang", "libya",
     "islamophobia"
+  ],
+
+  "mission_keywords": [
+    "muslim", "islam", "mosque", "hajj", "ramadan", "eid ", "quran", "hijab", "imam",
+    "pakistan", "bangladesh", "indonesia", "iran", "iraq", "turkey", "egypt", "jordan", "saudi", "qatar",
+    "tunisia", "morocco", "algeria", "mali", "niger", "chad", "kenya", "ethiopia", "eritrea", "myanmar", "rakhine",
+    "hamas", "israel", "gaza", "idf", "unrwa", "refugee"
   ],
 
   "designated_group_keywords": [
