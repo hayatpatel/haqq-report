@@ -150,7 +150,7 @@ or break another.
 | Threads | `TH_APP_ID`, `TH_APP_SECRET`, `TH_USER_ID`, `TH_TOKEN` (60 days, refreshable; Threads' own ID/secret) |
 | Token refresh | `GH_PAT_SECRETS` (fine-grained PAT, secrets:write on this repo only) |
 | Telegram (private owner feed) | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_ID`, `TELEGRAM_WEBHOOK_SECRET` (only for the approval Worker). `TELEGRAM_CHANNEL_ID` is **optional**: leave it empty unless you later turn on a public channel |
-| Bluesky | `BSKY_HANDLE`, `BSKY_APP_PASSWORD` |
+| Bluesky (**not planned**, leave empty) | `BSKY_HANDLE`, `BSKY_APP_PASSWORD`. The module stays in the code, disabled in `config.json` |
 | Supabase | `SUPABASE_URL`, `SUPABASE_KEY` |
 | AI | `GROQ_API_KEY`, `GEMINI_API_KEY` |
 

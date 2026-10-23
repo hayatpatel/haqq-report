@@ -30,6 +30,9 @@ SECRET_GROUPS = {
 }
 
 
+OPTIONAL_GROUPS = {"bluesky"}  # not planned; module kept but disabled in config.json
+
+
 def cmd_check_config(_args) -> int:
     cfg = load_config()
     print(f"config.json OK | mode={cfg['mode']} | enabled="
@@ -37,7 +40,9 @@ def cmd_check_config(_args) -> int:
     for group, names in SECRET_GROUPS.items():
         present = [n for n in names if os.environ.get(n)]
         missing = [n for n in names if n not in present]
-        print(f"  {group:14} set {len(present)}/{len(names)}" + (f"  missing: {', '.join(missing)}" if missing else ""))
+        note = "  (optional, not planned)" if group in OPTIONAL_GROUPS and missing else \
+            (f"  missing: {', '.join(missing)}" if missing else "")
+        print(f"  {group:14} set {len(present)}/{len(names)}" + note)
     return 0
 
 
