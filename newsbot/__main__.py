@@ -134,28 +134,65 @@ def cmd_test_post(args) -> int:
     return 1 if failed else 0
 
 
+def _db_preflight() -> list[str]:
+    """Secret-free checks on how the two Supabase secrets were stored. Never prints a value."""
+    import re
+
+    url, key = os.environ.get("SUPABASE_URL", ""), os.environ.get("SUPABASE_KEY", "")
+    notes = []
+    for name, val in (("SUPABASE_URL", url), ("SUPABASE_KEY", key)):
+        if not val:
+            notes.append(f"{name}: NOT SET (add it under Settings, Secrets and variables, Actions)")
+        elif val != val.strip() or "\n" in val or " " in val:
+            notes.append(f"{name}: contains a space or line break. Re-add the secret without it")
+    if url and not re.fullmatch(r"https://[a-z0-9]+\.supabase\.co/?", url.strip()):
+        notes.append("SUPABASE_URL: does not look like https://<project>.supabase.co "
+                     "(use the Project URL from Supabase, Project Settings, API)")
+    if key:
+        kind = ("new secret key (sb_secret_)" if key.strip().startswith("sb_secret_")
+                else "PUBLISHABLE key (sb_publishable_), wrong: use the secret key" if key.strip().startswith("sb_publishable_")
+                else "legacy JWT key" if key.strip().count(".") == 2 else "unrecognised format")
+        notes.append(f"SUPABASE_KEY: {kind}, {len(key.strip())} characters")
+    return notes
+
+
 def cmd_db_check(_args) -> int:
-    """Test the Supabase connection, the key, and every table. Sends the result to the owner's Telegram."""
+    """Test the Supabase connection, the key, and every table. Result goes to the run page and Telegram."""
     from . import owner_feed
     from .config import MissingSecret
     from .store import Store
 
+    pre = _db_preflight()
     try:
         store = Store()
     except MissingSecret as exc:
-        lines = [f"DB check: FAILED, {exc}"]
-        print("\n".join(lines)); owner_feed.message("\n".join(lines))
-        return 1
-    results = store.check()
-    bad = [r for r in results if not r[1]]
-    key_kind = "new-style sb_ key (apikey header only)" if store.headers.get("Authorization") is None else "legacy JWT key"
-    lines = [f"DB check: {'ALL OK' if not bad else str(len(bad)) + ' of ' + str(len(results)) + ' tables FAILED'} ({key_kind})"]
-    lines += [f"  {t}: {'ok' if ok else 'FAILED ' + d}" for t, ok, d in results]
-    if bad:
-        lines.append("Fix: HTTP 401 = wrong or mistyped SUPABASE_KEY; 404 = table missing, run db/schema.sql; "
-                     "no response = wrong SUPABASE_URL.")
-    print("\n".join(lines)); owner_feed.message("\n".join(lines))
-    return 1 if bad else 0
+        lines = ["DB check: FAILED, " + str(exc)] + ["  " + n for n in pre]
+        results = []
+    else:
+        results = store.check()
+        bad = [r for r in results if not r[1]]
+        key_kind = "apikey header only" if store.headers.get("Authorization") is None else "apikey + Bearer"
+        lines = [f"DB check: {'ALL OK' if not bad else str(len(bad)) + ' of ' + str(len(results)) + ' tables FAILED'} ({key_kind})"]
+        lines += ["  " + n for n in pre]
+        lines += [f"  {t}: {'ok' if ok else 'FAILED ' + d}" for t, ok, d in results]
+        if bad:
+            lines.append("Fix: HTTP 401 = wrong or mistyped SUPABASE_KEY; 404 = table missing, run db/schema.sql; "
+                         "no response or HTML = wrong SUPABASE_URL.")
+    failed = lines[0].startswith("DB check: FAILED") or any(not r[1] for r in results)
+    print("\n".join(lines))
+    if os.environ.get("GITHUB_ACTIONS"):  # make the reason visible on the run page itself
+        for t, ok, d in results:
+            if not ok:
+                print(f"::error title=db-check {t}::{d}")
+        for n in pre:
+            if "NOT SET" in n or "space" in n or "does not look" in n or "wrong" in n:
+                print(f"::error title=db-check secret::{n}")
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            with open(summary, "a", encoding="utf-8") as fh:
+                fh.write("### DB check\n\n```\n" + "\n".join(lines) + "\n```\n")
+    owner_feed.message("\n".join(lines))
+    return 1 if failed else 0
 
 
 def cmd_token_issued(args) -> int:
