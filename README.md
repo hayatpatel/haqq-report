@@ -116,7 +116,7 @@ db/schema.sql        Supabase tables (RLS on, no public policies)
 site/                static website output (generated)
 data/                source registry seed
 docs/                meta-setup.md, project-plan.md
-scripts/             set_github_secrets.sh
+scripts/             set_github_secrets.sh, import_credentials.py, resolve_ids.py
 tests/               pytest suite
 .github/workflows/   tests, ingest, breaking, calendar, health, keepalive
 config.json          non-secret settings (modes, limits, watch topics, schedule)
@@ -155,6 +155,21 @@ or break another.
 | AI | `GROQ_API_KEY`, `GEMINI_API_KEY` |
 
 To upload a filled-in `.env` to GitHub Actions secrets: `gh auth login`, then `./scripts/set_github_secrets.sh`.
+
+**Starting from a loosely labelled credentials file** (for example "Insta Access token", "Thread App Secret"):
+
+```bash
+python scripts/import_credentials.py path/to/credentials.txt   # writes .env with the canonical names above
+set -a; . ./.env; set +a
+python scripts/resolve_ids.py                                  # prints IG_USER_ID and TH_USER_ID (not secret); add them to .env
+./scripts/set_github_secrets.sh
+python -m newsbot check-config                                 # names only, never values
+```
+
+The importer prints which names were set or missing, never the values. It skips short-lived and user-level
+tokens (they are only stepping stones to the Page token), refuses to overwrite an existing `.env` without
+`--force`, and the credentials file itself must stay outside the repository. Delete it once the secrets are in
+GitHub.
 
 Meta setup (one app `HR-Publisher`, three use cases, no Page-to-Instagram link) is documented step by step in
 [`docs/meta-setup.md`](docs/meta-setup.md). Rotate any credential that has ever been pasted into a chat,
