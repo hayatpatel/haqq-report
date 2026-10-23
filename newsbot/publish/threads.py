@@ -45,3 +45,10 @@ def publish(text: str, image_url: str | None = None, *, sleep: Callable[[float],
     out = graph_request("POST", f"{_base()}/{user_id}/threads_publish",
                         data={"creation_id": created["id"], "access_token": token})
     return out["id"]
+
+
+def permalink(media_id: str) -> str:
+    """Public link to a published post (for the owner's Telegram message)."""
+    _, token = _creds()
+    out = graph_request("GET", f"{_base()}/{media_id}", params={"fields": "permalink", "access_token": token})
+    return out.get("permalink", "")

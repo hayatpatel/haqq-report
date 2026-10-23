@@ -101,6 +101,12 @@ def cmd_run(args) -> int:
     with RunLog("run-priority" if args.priority else "run", store) as rl:
         if store is None:
             rl.fail("Supabase not configured: nothing will be stored")
+        if store is not None:  # also read your Telegram commands (/fbtoken); the 5-minute workflow can be skipped by GitHub
+            try:
+                from . import approvals
+                rl.summary["handled"] = approvals.poll(store)["handled"]
+            except Exception as exc:  # noqa: BLE001
+                logging.getLogger("haqq.cli").warning("telegram commands not read (%s)", type(exc).__name__)
         rl.summary.update(runner.run(priority=args.priority, store=store))
         if rl.summary.get("ai_error"):
             rl.fail("AI providers unavailable")

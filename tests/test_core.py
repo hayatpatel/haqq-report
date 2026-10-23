@@ -109,12 +109,13 @@ def test_auto_mode_green_or_amber_is_ready():
     assert out.action == "ready"
 
 
-def test_red_always_needs_approval_even_in_auto():
+def test_red_is_posted_directly_by_default_but_can_require_approval():
     red = "Strike reported\nUN OCHA said children killed in a strike, according to the report."
-    # numbers/claims still pass; lane is Red because of child victims
-    ai = make_ai(red)
-    out = pipeline.process_article(art(), ai, {**config.load_config(), "mode": "auto"})
-    assert out.action == "needs_approval" and "child_victims" in out.reason
+    base = {**config.load_config(), "mode": "auto"}
+    out = pipeline.process_article(art(), make_ai(red), base)  # owner choice: post Red directly, review afterwards
+    assert out.action == "ready" and out.draft.lane.value == "red" and "child_victims" in out.draft.flags
+    held = pipeline.process_article(art(), make_ai(red), {**base, "red_needs_approval": True})
+    assert held.action == "needs_approval" and "child_victims" in held.reason
 
 
 def test_draft_failing_checks_twice_is_skipped():

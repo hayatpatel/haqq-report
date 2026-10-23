@@ -80,3 +80,10 @@ def publishing_limit() -> dict:
     user_id, token = _creds()
     return graph_request("GET", f"{_base()}/{user_id}/content_publishing_limit",
                          params={"fields": "quota_usage,config", "access_token": token})
+
+
+def permalink(media_id: str) -> str:
+    """Public link to a published post (for the owner's Telegram message)."""
+    _, token = _creds()
+    out = graph_request("GET", f"{_base()}/{media_id}", params={"fields": "permalink", "access_token": token})
+    return out.get("permalink", "")

@@ -58,14 +58,16 @@ def friendly_error(raw: str) -> tuple[str, str]:
     return raw.strip()[:200] or "Unknown error.", ""
 
 
-def _post_link(platform: str, post_id: str) -> str:
-    if platform == "facebook" and post_id:
-        return f"https://www.facebook.com/{post_id}"
-    return f"id {post_id}" if post_id else "posted"
+def _post_link(r) -> str:
+    if r.extra.get("url"):
+        return r.extra["url"]
+    if r.platform == "facebook" and r.post_id:
+        return f"https://www.facebook.com/{r.post_id}"
+    return f"id {r.post_id}" if r.post_id else "posted"
 
 
 def post_results(headline: str, results: Iterable, *, dry_run: bool, cfg: dict | None = None,
-                 lane: str = "", source: str = "") -> None:
+                 lane: str = "", source: str = "", note: str = "") -> None:
     """One message per story: status line, headline, one line per platform, source."""
     if not _enabled("posts", cfg):
         return
@@ -91,7 +93,7 @@ def post_results(headline: str, results: Iterable, *, dry_run: bool, cfg: dict |
         if r.skipped and r.ok:
             lines.append(f"{name}: would post")
         elif r.ok:
-            lines.append(f"{name}: ✅ {_post_link(r.platform, r.post_id)}")
+            lines.append(f"{name}: ✅ {_post_link(r)}")
         else:
             what, fix = friendly_error(r.error or "")
             lines.append(f"{name}: ❌ {what}")
@@ -99,8 +101,9 @@ def post_results(headline: str, results: Iterable, *, dry_run: bool, cfg: dict |
                 fixes.append(fix)
     if fixes:
         lines += ["", "Fix: " + " ".join(fixes)]
-    if source:
-        lines += ["", f"Source: {source}"]
+    tail = ([f"Flagged: {note}"] if note and ok else []) + ([f"Source: {source}"] if source else [])
+    if tail:
+        lines += [""] + tail
     if not dry_run and not ok and not failed:
         return
     _send("\n".join(lines))
@@ -167,8 +170,8 @@ def draft_preview(headline: str, body: str, lane: str, reason: str, sources: lis
     """A draft that needs a human decision. Not posted until you tap Approve."""
     text = (f"🔴 NEEDS YOUR APPROVAL · {lane.upper()}\nWhy: {reason}\n\n{headline}\n\n{body}"
             f"\n\nSource: {', '.join(sources)}")[:3900]
-    if draft_id is None:
-        _send(text)
+    if draft_id is None or not load_config().get("approvals", {}).get("buttons", False):
+        _send(text.replace("🔴 NEEDS YOUR APPROVAL", "🔴 DRAFT (not posted)"))
         return
     import json
 

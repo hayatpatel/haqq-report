@@ -164,7 +164,8 @@
   },
   "approvals": {
     "max_age_hours": 48,
-    "note": "Approve/Reject buttons in Telegram. A draft older than this cannot be posted."
+    "note": "Approve/Reject buttons in Telegram. A draft older than this cannot be posted.",
+    "buttons": false
   },
   "cards": {
     "enabled": true
@@ -223,5 +224,6 @@
   },
   "ingest": {
     "keep_undated": false
-  }
+  },
+  "red_needs_approval": false
 }

@@ -309,3 +309,7 @@ Send the bot `/fbtoken <token>` (or just `/fbtoken` for the steps). Paste a **Us
 ## Schedule (6 runs a day)
 
 The main run (`ingest.yml`) is every 4 hours: 05:35, 09:35, 13:35, 17:35, 21:35 and 01:35 IST. The 15-minute priority run (`breaking.yml`) is switched off. Each run posts at most 2 stories (`run.max_posts_per_run`); extra ready stories wait and go out in a later run within 48 hours; the daily cap is 10 (`limits.MAX_POSTS_PER_DAY`). The approvals workflow still checks Telegram every 5 minutes for your taps and `/fbtoken` messages; it posts nothing new by itself. Once you know when your audience is online, change the cron times in `ingest.yml` (GitHub uses UTC).
+
+## Posting everything directly
+
+Red stories are posted like the rest (`red_needs_approval: false` in `config.json`); the Telegram message shows the lane and the reason it was flagged ("Flagged: ...") so you can review the risky ones first. Approve/Reject buttons are off (`approvals.buttons`): they need a listener that answers within seconds, and GitHub's 5-minute schedule is often skipped. Every Telegram post message carries a direct link to each post: open it and delete it on the platform (Instagram and Threads cannot be deleted by API anyway). The bot also reads your Telegram commands (such as `/fbtoken`) at the start of every main run; to apply one immediately, run Actions, **approvals**, Run workflow.

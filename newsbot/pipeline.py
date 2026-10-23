@@ -88,7 +88,7 @@ def process_article(article: Article, ai_call: Callable[[str], str], cfg: dict |
     draft.lane, reasons = safety.classify_lane(draft, cfg)
     draft.flags = reasons
 
-    needs_human = draft.lane == Lane.RED or cfg.get("mode", "review") == "review"
+    needs_human = (draft.lane == Lane.RED and cfg.get("red_needs_approval", True)) or cfg.get("mode", "review") == "review"
     if needs_human:
         return Outcome(article.url, "needs_approval", ", ".join(reasons) or "review mode", draft)
     return Outcome(article.url, "ready", draft=draft)
@@ -152,7 +152,14 @@ def publish_draft(draft: Draft, image_url: str = "", *, dry_run: bool = True,
         if dry_run:
             results.append(PublishResult(platform, ok=True, skipped=True, extra={"dry_run": True}))
             continue
-        results.append(run_platform(platform, job, alert=alert))
-    owner_feed.post_results(draft.headline, results, dry_run=dry_run, cfg=cfg, lane=draft.lane.value,
+        res = run_platform(platform, job, alert=alert)
+        if res.ok and platform in ("threads", "instagram"):
+            try:  # a direct link so the owner can open (and delete) the post in one tap
+                mod = threads if platform == "threads" else instagram
+                res.extra["url"] = mod.permalink(res.post_id)
+            except Exception:  # noqa: BLE001 - best effort
+                pass
+        results.append(res)
+    owner_feed.post_results(draft.headline, results, dry_run=dry_run, cfg=cfg, lane=draft.lane.value, note=", ".join(draft.flags),
                             source=template.source_name(draft.source_urls[0], cfg) if draft.source_urls else "")
     return results
