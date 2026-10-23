@@ -9,7 +9,12 @@ from __future__ import annotations
 import logging
 from typing import Iterable
 
-from .config import load_config
+import os
+from pathlib import Path
+
+import requests
+
+from .config import load_config, redact
 from .publish.telegram_channel import alert_owner
 
 log = logging.getLogger("haqq.owner_feed")
@@ -66,3 +71,25 @@ def health_report(report: str, failed: bool, cfg: dict | None = None) -> None:
 def message(text: str) -> None:
     """Free-form notice, used by workflow failure steps."""
     _send(text)
+
+
+def send_log(path: Path, caption: str = "") -> bool:
+    """Send a run log file to the owner's private chat (last ~1 MB). Silent no-op if Telegram is not set up."""
+    token, chat = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip(), os.environ.get("TELEGRAM_OWNER_ID", "").strip()
+    if not token or not chat:
+        return False
+    try:
+        data = Path(path).read_bytes()[-1_000_000:]
+        resp = requests.post(f"https://api.telegram.org/bot{token}/sendDocument",
+                             data={"chat_id": chat, "caption": redact(caption)[:900]},
+                             files={"document": (Path(path).name, data)}, timeout=60)
+        return resp.ok
+    except Exception:  # noqa: BLE001 - the feed must never break a run
+        log.warning("log file not sent")
+        return False
+
+
+def draft_preview(headline: str, body: str, lane: str, reason: str, sources: list[str]) -> None:
+    """A draft that needs human review. NOT posted anywhere."""
+    _send(f"DRAFT for review (not posted)\nLane: {lane.upper()} ({reason})\n\n{headline}\n\n{body}"
+          f"\n\nSource: {', '.join(sources)}"[:3900])

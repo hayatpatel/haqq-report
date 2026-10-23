@@ -40,3 +40,6 @@ worker/.dev.vars
 .DS_Store
 .idea/
 .vscode/
+
+# Run logs (detailed per-run files; also uploaded as Actions artifacts)
+logs/

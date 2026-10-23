@@ -12,7 +12,7 @@ from .config import require_env
 
 # Every table created by db/schema.sql.
 REQUIRED_TABLES = ["sources", "creators", "articles", "claims", "factchecks", "drafts", "posts",
-                   "corrections", "occasions", "tokens", "settings"]
+                   "corrections", "occasions", "tokens", "settings", "run_logs"]
 
 
 def auth_headers(key: str) -> dict:
@@ -51,6 +51,11 @@ class Store:
 
     def select(self, table: str, **filters) -> list[dict]:
         params = {k: f"eq.{v}" for k, v in filters.items()}
+        resp = requests.get(f"{self.base}/{table}", headers=self.headers, params=params, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+
+    def select_raw(self, table: str, params: dict) -> list[dict]:
         resp = requests.get(f"{self.base}/{table}", headers=self.headers, params=params, timeout=30)
         resp.raise_for_status()
         return resp.json()
