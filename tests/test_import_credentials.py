@@ -29,3 +29,19 @@ def test_labels_map_to_canonical_names():
 def test_conflicting_duplicates_reported():
     _, conflicts, _, _ = ic.parse("App ID: 1\nApp ID: 2\n")
     assert conflicts == {"FB_APP_ID"}
+
+
+def test_sectioned_services_and_alternate_labels():
+    found, _, _, _ = ic.parse("""Telegram: 
+API: 111:AAA
+Owner ID: 42
+
+Supabase URL: https://x.supabase.co
+Supabase secret Key: sb_secret_abc
+
+groq API: gsk_1
+Gemini API: AQ.2
+""")
+    assert found == {"TELEGRAM_BOT_TOKEN": "111:AAA", "TELEGRAM_OWNER_ID": "42",
+                     "SUPABASE_URL": "https://x.supabase.co", "SUPABASE_KEY": "sb_secret_abc",
+                     "GROQ_API_KEY": "gsk_1", "GEMINI_API_KEY": "AQ.2"}

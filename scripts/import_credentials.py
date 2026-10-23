@@ -26,11 +26,19 @@ ALIASES = {
     "TH_APP_SECRET": ["thappsecret", "threadappsecret", "threadsappsecret"],
     "TH_USER_ID": ["thuserid", "threaduserid", "threadsuserid"],
     "TH_TOKEN": ["thtoken", "threadaccesstoken", "threadsaccesstoken", "threadtoken", "threadstoken"],
+    "TELEGRAM_BOT_TOKEN": ["telegrambottoken", "telegramapi", "telegrambotapi", "telegramtoken"],
+    "TELEGRAM_OWNER_ID": ["telegramownerid", "telegramowner"],
+    "TELEGRAM_CHANNEL_ID": ["telegramchannelid", "telegramchannel"],
+    "SUPABASE_URL": ["supabaseurl"],
+    "SUPABASE_KEY": ["supabasekey", "supabasesecretkey", "supabaseservicekey", "supabaseservicerolekey"],
+    "GROQ_API_KEY": ["groqapikey", "groqapi", "groqkey"],
+    "GEMINI_API_KEY": ["geminiapikey", "geminiapi", "geminikey"],
 }
 # Not stored: short-lived or user-level tokens are only stepping stones to the Page token.
 IGNORED = {"shorttoken", "newaccesstoken", "longlivedusertoken", "usertoken"}
 CANON_ORDER = list(ALIASES)
 LOOKUP = {a: canon for canon, al in ALIASES.items() for a in al + [re.sub(r"\W", "", canon.lower())]}
+HEADER = re.compile(r"^\s*([A-Za-z][A-Za-z ]*?)\s*:\s*$")
 LINE = re.compile(r"^\s*([^:\t=]+?)\s*(?:[:=]|\t+)\s*(\S.*?)\s*$")
 
 
@@ -40,8 +48,13 @@ def norm(s):
 
 def parse(text):
     found, conflicts, ignored, unlabelled = {}, set(), [], 0
+    section = ""
     for line in text.splitlines():
         if not line.strip():
+            continue
+        h = HEADER.match(line)
+        if h:
+            section = norm(h.group(1))
             continue
         m = LINE.match(line)
         if not m:
@@ -49,6 +62,8 @@ def parse(text):
                 unlabelled += 1  # a bare token on its own line
             continue
         key, val = norm(m.group(1)), m.group(2)
+        if section and section + key in LOOKUP:
+            key = section + key
         if key in IGNORED:
             ignored.append(m.group(1).strip())
         elif key in LOOKUP:
