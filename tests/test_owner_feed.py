@@ -44,3 +44,28 @@ def test_feed_never_raises(monkeypatch):
     monkeypatch.setattr(owner_feed, "alert_owner", boom)
     owner_feed.error("x", "y", cfg=ON)
     owner_feed.message("hello")
+
+
+def test_test_post_is_dry_run_by_default(monkeypatch, capsys):
+    from newsbot import __main__ as cli
+    monkeypatch.setattr(owner_feed, "alert_owner", lambda t: None)
+    monkeypatch.setattr("newsbot.publish.meta_fb.post_text", lambda t: (_ for _ in ()).throw(AssertionError("must not post")))
+    assert cli.main(["test-post", "facebook"]) == 0
+    assert "would post" in capsys.readouterr().out
+
+
+def test_test_post_live_facebook_posts_then_deletes(monkeypatch, capsys):
+    from newsbot import __main__ as cli
+    calls = []
+    monkeypatch.setattr(owner_feed, "alert_owner", lambda t: None)
+    monkeypatch.setattr("newsbot.publish.meta_fb.post_text", lambda t: calls.append("post") or "1_2")
+    monkeypatch.setattr("newsbot.publish.meta_fb.delete_post", lambda i: calls.append("delete") or True)
+    assert cli.main(["test-post", "facebook", "--live"]) == 0
+    assert calls == ["post", "delete"] and "deleted again: True" in capsys.readouterr().out
+
+
+def test_test_post_reports_failure_without_raising(monkeypatch, capsys):
+    from newsbot import __main__ as cli
+    monkeypatch.setattr(owner_feed, "alert_owner", lambda t: None)
+    assert cli.main(["test-post", "instagram", "--live"]) == 1
+    assert "needs --image-url" in capsys.readouterr().out

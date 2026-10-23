@@ -1,0 +1,61 @@
+name: test-post
+
+# Manual connection test for the Meta platforms. A dry run unless "live" is ticked.
+# Facebook live test posts a line and deletes it again. Instagram and Threads cannot be deleted
+# through the API, so remove those test posts by hand.
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to test
+        type: choice
+        options: [facebook, instagram, threads, all]
+        default: facebook
+      live:
+        description: "Really publish (leave unticked for a dry run)"
+        type: boolean
+        default: false
+      image_url:
+        description: "Public JPEG URL (needed for instagram)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  test-post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Test post
+        env:
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_TOKEN: ${{ secrets.IG_TOKEN }}
+          TH_USER_ID: ${{ secrets.TH_USER_ID }}
+          TH_TOKEN: ${{ secrets.TH_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OWNER_ID: ${{ secrets.TELEGRAM_OWNER_ID }}
+          PLATFORM: ${{ inputs.platform }}
+          LIVE: ${{ inputs.live }}
+          IMAGE_URL: ${{ inputs.image_url }}
+        run: |
+          args=("$PLATFORM")
+          [ "$LIVE" = "true" ] && args+=(--live)
+          [ -n "$IMAGE_URL" ] && args+=(--image-url "$IMAGE_URL")
+          python -m newsbot test-post "${args[@]}"
+      - name: Tell the owner on Telegram if this run failed
+        if: ${{ failure() }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OWNER_ID: ${{ secrets.TELEGRAM_OWNER_ID }}
+        run: |
+          python -m newsbot notify "ERROR: workflow 'test-post' failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

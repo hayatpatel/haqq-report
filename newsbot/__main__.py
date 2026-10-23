@@ -93,6 +93,47 @@ def cmd_health(_args) -> int:
     return 1 if failed else 0
 
 
+TEST_TEXT = "Haqq Report test post (please ignore). Source: Haqq Report internal connection test."
+
+
+def cmd_test_post(args) -> int:
+    """Manual connection test per platform. Dry run unless --live. Bypasses the enable flags on purpose.
+
+    facebook: posts text, then deletes it again (unless --keep). instagram: needs --image-url (public JPEG),
+    cannot be deleted by API so remove it by hand. threads: posts text, remove it by hand.
+    """
+    from . import owner_feed
+    from .publish import instagram, meta_fb, threads
+
+    platforms = ["facebook", "instagram", "threads"] if args.platform == "all" else [args.platform]
+    mode = "LIVE" if args.live else "dry run"
+    lines, failed = [f"Test post ({mode})"], False
+    for name in platforms:
+        try:
+            if name == "instagram" and not args.image_url:
+                raise ValueError("instagram needs --image-url (a public JPEG)")
+            if not args.live:
+                lines.append(f"  {name}: would post (dry run, nothing sent)")
+                continue
+            if name == "facebook":
+                post_id = meta_fb.post_text(TEST_TEXT)
+                if args.keep:
+                    lines.append(f"  facebook: OK {post_id} (kept)")
+                else:
+                    deleted = meta_fb.delete_post(post_id)
+                    lines.append(f"  facebook: OK {post_id}, deleted again: {deleted}")
+            elif name == "instagram":
+                lines.append(f"  instagram: OK {instagram.publish_image(args.image_url, TEST_TEXT)} (remove by hand)")
+            else:
+                lines.append(f"  threads: OK {threads.publish(TEST_TEXT)} (remove by hand)")
+        except Exception as exc:  # noqa: BLE001 - report each platform on its own, never print secrets
+            failed = True
+            lines.append(f"  {name}: FAILED {type(exc).__name__}: {str(exc)[:200]}")
+    print("\n".join(lines))
+    owner_feed.message("\n".join(lines))
+    return 1 if failed else 0
+
+
 def cmd_notify(args) -> int:
     """Send a free-form message to the owner's private Telegram chat (used by workflow failure steps)."""
     from . import owner_feed
@@ -110,6 +151,12 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("calendar").set_defaults(fn=cmd_calendar)
     sub.add_parser("corrections").set_defaults(fn=cmd_corrections)
     sub.add_parser("health").set_defaults(fn=cmd_health)
+    p = sub.add_parser("test-post")
+    p.add_argument("platform", choices=["facebook", "instagram", "threads", "all"])
+    p.add_argument("--live", action="store_true", help="really publish (default is a dry run)")
+    p.add_argument("--image-url", default="", help="public JPEG URL (required for instagram)")
+    p.add_argument("--keep", action="store_true", help="do not delete the Facebook test post")
+    p.set_defaults(fn=cmd_test_post)
     p = sub.add_parser("notify")
     p.add_argument("text", nargs="+")
     p.set_defaults(fn=cmd_notify)

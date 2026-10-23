@@ -190,6 +190,17 @@ No public channel is needed. The bot sends everything to your own private chat w
 The feed never raises: if Telegram is down or unconfigured, publishing carries on. Weekly insights and a
 per-post log in the database are still on the roadmap.
 
+## Launch checklist
+
+1. Merge the open pull requests, then add every secret (see Secrets) and the variable `BOT_ENABLED=false`.
+2. Supabase: paste `db/schema.sql` into the SQL editor and run it. The `tokens` rows are then created by the health job.
+3. Actions, **Daily health (tokens)**, *Run workflow*. Expect a Telegram report with three platform lines.
+4. Actions, **test-post**, platform `facebook`, leave *live* unticked (dry run), then tick *live*. The post
+   appears on the Page and is deleted again. Repeat for `threads` and `instagram` (needs a public JPEG URL).
+   Instagram and Threads test posts cannot be deleted through the API: remove them by hand.
+5. Turn platforms on one at a time in `config.json` (`enable`), keep `mode` at `review`, then set
+   `BOT_ENABLED=true`. Run in review mode for at least 2 weeks before allowing automatic posting.
+
 ## GitHub Actions
 
 Times are IST in the plan; cron runs in UTC.
