@@ -77,3 +77,24 @@ def test_db_check_emits_github_annotations(monkeypatch, capsys, tmp_path):
     assert cli.main(["db-check"]) == 1
     assert "::error title=db-check tokens::HTTP 401" in capsys.readouterr().out
     assert "DB check" in (tmp_path / "s.md").read_text()
+
+
+def test_db_check_hint_covers_permission_denied(monkeypatch, capsys):
+    monkeypatch.setenv("SUPABASE_URL", "https://abcdefgh.supabase.co"); monkeypatch.setenv("SUPABASE_KEY", "sb_secret_abc")
+    monkeypatch.setattr(owner_feed, "alert_owner", lambda t: None)
+
+    def fake_get(url, **kw):
+        r = MagicMock()
+        r.raise_for_status.side_effect = _http_error(403, {"message": "permission denied for table tokens", "code": "42501"})
+        return r
+    monkeypatch.setattr(store.requests, "get", fake_get)
+    assert cli.main(["db-check"]) == 1
+    out = capsys.readouterr().out
+    assert "42501" in out and "grant_service_role.sql" in out
+
+
+def test_schema_grants_only_service_role():
+    from pathlib import Path
+    sql = (Path(__file__).resolve().parent.parent / "db" / "schema.sql").read_text()
+    assert "to service_role" in sql
+    assert "to anon" not in sql and "to authenticated" not in sql
