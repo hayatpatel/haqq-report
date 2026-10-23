@@ -19,7 +19,11 @@ class FakeStore:
         self.existing, self.rows = list(existing), {"articles": [], "claims": [], "drafts": [], "run_logs": []}
 
     def select_raw(self, table, params):
-        return [{"url": u} for u in self.existing]
+        return [{"url": u, "processed": True} for u in self.existing] + \
+               [{"url": u, "processed": False} for u in getattr(self, "unprocessed", [])]
+
+    def update(self, table, match, values):
+        self.rows.setdefault("updates", []).append((table, match, values))
 
     def upsert(self, table, row, on_conflict):
         self.rows[table].append(row); return {"id": len(self.rows[table])}
@@ -118,3 +122,22 @@ def test_cli_run_command(monkeypatch):
     assert cli.main(["run"]) == 1  # no Supabase configured is reported as an error
     monkeypatch.setattr(cli, "_store_or_none", lambda: FakeStore())
     assert cli.main(["run", "--priority"]) == 0
+
+
+def test_processed_articles_are_marked_and_unprocessed_are_retried(monkeypatch):
+    monkeypatch.setattr(owner_feed, "draft_preview", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "process_article", lambda a, ai_call, cfg: outcome(a.url))
+    store = FakeStore(existing=["https://e.com/1"])
+    store.unprocessed = ["https://e.com/2"]  # stored during an earlier AI outage
+    stats = runner.run(store=store, ai_call=lambda p: "", cfg=CFG, fetcher=lambda p: [art(1), art(2)])
+    assert stats["new"] == 1  # story 2 is retried, story 1 is skipped
+    assert any(u[2] == {"processed": True} for u in store.rows["updates"])
+
+
+def test_ai_outage_leaves_articles_unprocessed(monkeypatch):
+    def boom(a, ai_call, cfg):
+        raise ai.AIUnavailable("down")
+    monkeypatch.setattr(pipeline, "process_article", boom)
+    store = FakeStore()
+    runner.run(store=store, ai_call=lambda p: "", cfg=CFG, fetcher=lambda p: [art(1)])
+    assert not store.rows.get("updates")

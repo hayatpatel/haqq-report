@@ -21,16 +21,30 @@ def _iso(dt: datetime | None) -> str | None:
 
 
 def known_keys(store, days: int) -> set[str]:
-    """URLs already stored (normalised like Article.key), so a re-run does not redo old stories."""
+    """URLs already PROCESSED (normalised like Article.key). Stored-but-unprocessed articles are retried,
+    so an AI outage never makes the backlog invisible."""
     if store is None:
         return set()
     since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     try:
-        rows = store.select_raw("articles", {"select": "url", "fetched_at": f"gte.{since}"})
-    except Exception as exc:  # noqa: BLE001
-        log.warning("could not read stored articles (%s); dedupe uses this run only", type(exc).__name__)
-        return set()
+        rows = store.select_raw("articles", {"select": "url,processed", "fetched_at": f"gte.{since}"})
+        rows = [r for r in rows if r.get("processed")]
+    except Exception as exc:  # noqa: BLE001 - e.g. `processed` column not created yet (db/migrations/003)
+        log.warning("processed flag unavailable (%s); treating every stored article as known", type(exc).__name__)
+        try:
+            rows = store.select_raw("articles", {"select": "url", "fetched_at": f"gte.{since}"})
+        except Exception:  # noqa: BLE001
+            return set()
     return {r["url"].strip().lower().rstrip("/") for r in rows}
+
+
+def mark_processed(store, article_id: int | None) -> None:
+    if store is None or article_id is None:
+        return
+    try:
+        store.update("articles", {"id": article_id}, {"processed": True})
+    except Exception as exc:  # noqa: BLE001
+        log.warning("could not mark article processed (%s): run db/migrations/003_articles_processed.sql", type(exc).__name__)
 
 
 def save_article(store, a: Article) -> int | None:
@@ -89,8 +103,10 @@ def run(priority: bool = False, *, store=None, ai_call: Callable[[str], str] | N
     stats["new"] = len(fresh)
     log.info("%d fetched, %d new after dedupe and window", len(fetched), len(fresh))
 
+    ids: dict[str, int | None] = {}
     for article in fresh:  # store every new article, even those we do not draft this run
-        if save_article(store, article):
+        ids[article.url] = save_article(store, article)
+        if ids[article.url]:
             stats["stored"] += 1
 
     for article in fresh[: limits.get("max_articles", 8)]:
@@ -102,12 +118,14 @@ def run(priority: bool = False, *, store=None, ai_call: Callable[[str], str] | N
             break
         except Exception as exc:  # noqa: BLE001 - one bad article must not stop the run
             log.exception("article failed: %s (%s)", article.url, type(exc).__name__)
+            mark_processed(store, ids.get(article.url))  # do not let a poison article block every future run
             continue
         log.info("%s -> %s %s", article.url, outcome.action, outcome.reason)
+        mark_processed(store, ids.get(article.url))
         stats[outcome.action] = stats.get(outcome.action, 0) + 1
         if outcome.draft is None:
             continue
-        save_draft(store, save_article(store, article), outcome)
+        save_draft(store, ids.get(article.url), outcome)
         if outcome.action == "needs_approval" and stats["previews_sent"] < limits.get("max_telegram_drafts", 5):
             d = outcome.draft
             owner_feed.draft_preview(d.headline, d.body, d.lane.value, outcome.reason, d.source_urls)

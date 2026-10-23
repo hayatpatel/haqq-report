@@ -241,6 +241,43 @@ def cmd_db_check(_args) -> int:
     return 1 if failed else 0
 
 
+def cmd_ai_check(_args) -> int:
+    """Which AI models can our keys actually use? Lists them, tests one tiny call, reports to Telegram."""
+    from . import ai, owner_feed
+    from .config import load_config
+
+    cfg = load_config()["ai"]
+    available = ai.list_models()
+    lines, ok = ["AI check"], False
+    for provider in cfg["provider_order"]:
+        models = available.get(provider)
+        if models is None:
+            lines.append(f"  {provider}: key not set")
+            continue
+        wanted = ai._models(cfg, provider)
+        usable = [m for m in wanted if m in models]
+        lines.append(f"  {provider}: {len(models)} models visible to this key")
+        lines.append(f"    configured and usable: {', '.join(usable) or 'NONE'}")
+        lines.append(f"    configured but missing: {', '.join(m for m in wanted if m not in models) or '-'}")
+        if not usable:
+            lines.append("    key can see (first 12): " + ", ".join(models[:12]))
+    try:
+        reply = ai.generate("Reply with the single word: ready")
+        lines.append(f"  test call: OK ({reply.strip()[:40]!r})")
+        ok = True
+    except Exception as exc:  # noqa: BLE001
+        lines.append(f"  test call: FAILED {str(exc)[:600]}")
+    print("\n".join(lines))
+    if os.environ.get("GITHUB_ACTIONS") and not ok:
+        print(f"::error title=ai-check::{lines[-1]}")
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as fh:
+            fh.write("### AI check\n\n```\n" + "\n".join(lines) + "\n```\n")
+    owner_feed.message("\n".join(lines))
+    return 0 if ok else 1
+
+
 def cmd_token_issued(args) -> int:
     """Record when an Instagram/Threads token was really generated (the token cannot tell us itself)."""
     from datetime import datetime, timedelta, timezone
@@ -280,6 +317,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--keep", action="store_true", help="do not delete the Facebook test post")
     p.set_defaults(fn=cmd_test_post)
     sub.add_parser("db-check").set_defaults(fn=cmd_db_check)
+    sub.add_parser("ai-check").set_defaults(fn=cmd_ai_check)
     p = sub.add_parser("token-issued")
     p.add_argument("platform", choices=["instagram", "threads"])
     p.add_argument("--days-ago", type=int, default=0)
