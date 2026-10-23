@@ -69,3 +69,26 @@ def test_test_post_reports_failure_without_raising(monkeypatch, capsys):
     monkeypatch.setattr(owner_feed, "alert_owner", lambda t: None)
     assert cli.main(["test-post", "instagram", "--live"]) == 1
     assert "needs --image-url" in capsys.readouterr().out
+
+
+def test_test_post_all_dry_run_skips_instagram_without_image(monkeypatch, capsys):
+    from newsbot import __main__ as cli
+    monkeypatch.setattr(owner_feed, "alert_owner", lambda t: None)
+    assert cli.main(["test-post", "all"]) == 0
+    out = capsys.readouterr().out
+    assert "instagram: SKIPPED" in out and "facebook: would post" in out and "threads: would post" in out
+
+
+def test_test_post_failure_becomes_github_annotation(monkeypatch, capsys, tmp_path):
+    from newsbot import __main__ as cli
+    from newsbot.publish.base import PublishError
+    monkeypatch.setattr(owner_feed, "alert_owner", lambda t: None)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true"); monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "s.md"))
+
+    def boom(text, image_url=None, **kw):
+        raise PublishError('HTTP 400: {"code": 190, "message": "Invalid OAuth access token"}')
+    monkeypatch.setattr("newsbot.publish.threads.publish", boom)
+    assert cli.main(["test-post", "threads", "--live"]) == 1
+    out = capsys.readouterr().out
+    assert "::error title=test-post threads::PublishError: HTTP 400" in out and "190" in out
+    assert "Test post" in (tmp_path / "s.md").read_text()
