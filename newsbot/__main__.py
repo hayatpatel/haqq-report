@@ -176,7 +176,8 @@ def cmd_db_check(_args) -> int:
         lines += ["  " + n for n in pre]
         lines += [f"  {t}: {'ok' if ok else 'FAILED ' + d}" for t, ok, d in results]
         if bad:
-            lines.append("Fix: HTTP 401 = wrong or mistyped SUPABASE_KEY; 404 = table missing, run db/schema.sql; "
+            lines.append("Fix: 403 / 42501 permission denied = run db/grant_service_role.sql in the Supabase SQL editor; "
+                         "401 = wrong or mistyped SUPABASE_KEY; 404 = table missing, run db/schema.sql; "
                          "no response or HTML = wrong SUPABASE_URL.")
     failed = lines[0].startswith("DB check: FAILED") or any(not r[1] for r in results)
     print("\n".join(lines))

@@ -193,7 +193,9 @@ per-post log in the database are still on the roadmap.
 ## Launch checklist
 
 1. Merge the open pull requests, then add every secret (see Secrets) and the variable `BOT_ENABLED=false`.
-2. Supabase: paste `db/schema.sql` into the SQL editor and run it. The `tokens` rows are then created by the health job.
+2. Supabase: paste `db/schema.sql` into the SQL editor and run it. It ends with the `service_role` grants that Supabase
+   now requires for new tables. If you ran an older copy and db-check says `42501 permission denied`, run
+   `db/grant_service_role.sql` once. The `tokens` rows are then created by the health job.
 3. Actions, **Daily health (tokens)**, *Run workflow*. Expect a Telegram report with three platform lines.
 4. Actions, **test-post**, platform `facebook`, leave *live* unticked (dry run), then tick *live*. The post
    appears on the Page and is deleted again. Repeat for `threads` and `instagram` (needs a public JPEG URL).
