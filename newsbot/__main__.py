@@ -105,12 +105,16 @@ def cmd_test_post(args) -> int:
     from . import owner_feed
     from .publish import instagram, meta_fb, threads
 
-    platforms = ["facebook", "instagram", "threads"] if args.platform == "all" else [args.platform]
+    all_mode = args.platform == "all"
+    platforms = ["facebook", "instagram", "threads"] if all_mode else [args.platform]
     mode = "LIVE" if args.live else "dry run"
-    lines, failed = [f"Test post ({mode})"], False
+    lines, failures = [f"Test post ({mode})"], []
     for name in platforms:
         try:
             if name == "instagram" and not args.image_url:
+                if all_mode:  # not a failure when testing everything: Instagram simply cannot post without an image
+                    lines.append("  instagram: SKIPPED (needs an image_url, a public JPEG)")
+                    continue
                 raise ValueError("instagram needs --image-url (a public JPEG)")
             if not args.live:
                 lines.append(f"  {name}: would post (dry run, nothing sent)")
@@ -126,12 +130,20 @@ def cmd_test_post(args) -> int:
                 lines.append(f"  instagram: OK {instagram.publish_image(args.image_url, TEST_TEXT)} (remove by hand)")
             else:
                 lines.append(f"  threads: OK {threads.publish(TEST_TEXT)} (remove by hand)")
-        except Exception as exc:  # noqa: BLE001 - report each platform on its own, never print secrets
-            failed = True
-            lines.append(f"  {name}: FAILED {type(exc).__name__}: {str(exc)[:200]}")
+        except Exception as exc:  # noqa: BLE001 - report each platform on its own; messages are already redacted
+            detail = f"{type(exc).__name__}: {str(exc)[:400]}"
+            failures.append((name, detail))
+            lines.append(f"  {name}: FAILED {detail}")
     print("\n".join(lines))
+    if os.environ.get("GITHUB_ACTIONS"):  # make the reason visible on the run page itself
+        for name, detail in failures:
+            print(f"::error title=test-post {name}::{detail}")
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            with open(summary, "a", encoding="utf-8") as fh:
+                fh.write("### Test post\n\n```\n" + "\n".join(lines) + "\n```\n")
     owner_feed.message("\n".join(lines))
-    return 1 if failed else 0
+    return 1 if failures else 0
 
 
 def _db_preflight() -> list[str]:
