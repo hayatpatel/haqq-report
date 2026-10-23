@@ -134,6 +134,30 @@ def cmd_test_post(args) -> int:
     return 1 if failed else 0
 
 
+def cmd_db_check(_args) -> int:
+    """Test the Supabase connection, the key, and every table. Sends the result to the owner's Telegram."""
+    from . import owner_feed
+    from .config import MissingSecret
+    from .store import Store
+
+    try:
+        store = Store()
+    except MissingSecret as exc:
+        lines = [f"DB check: FAILED, {exc}"]
+        print("\n".join(lines)); owner_feed.message("\n".join(lines))
+        return 1
+    results = store.check()
+    bad = [r for r in results if not r[1]]
+    key_kind = "new-style sb_ key (apikey header only)" if store.headers.get("Authorization") is None else "legacy JWT key"
+    lines = [f"DB check: {'ALL OK' if not bad else str(len(bad)) + ' of ' + str(len(results)) + ' tables FAILED'} ({key_kind})"]
+    lines += [f"  {t}: {'ok' if ok else 'FAILED ' + d}" for t, ok, d in results]
+    if bad:
+        lines.append("Fix: HTTP 401 = wrong or mistyped SUPABASE_KEY; 404 = table missing, run db/schema.sql; "
+                     "no response = wrong SUPABASE_URL.")
+    print("\n".join(lines)); owner_feed.message("\n".join(lines))
+    return 1 if bad else 0
+
+
 def cmd_token_issued(args) -> int:
     """Record when an Instagram/Threads token was really generated (the token cannot tell us itself)."""
     from datetime import datetime, timedelta, timezone
@@ -169,6 +193,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--image-url", default="", help="public JPEG URL (required for instagram)")
     p.add_argument("--keep", action="store_true", help="do not delete the Facebook test post")
     p.set_defaults(fn=cmd_test_post)
+    sub.add_parser("db-check").set_defaults(fn=cmd_db_check)
     p = sub.add_parser("token-issued")
     p.add_argument("platform", choices=["instagram", "threads"])
     p.add_argument("--days-ago", type=int, default=0)
