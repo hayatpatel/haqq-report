@@ -72,26 +72,42 @@ def kicker(draft: Draft) -> str:
 
 
 def build_caption(draft: Draft, platform: str, page_url: str = "", cfg: dict | None = None) -> str:
+    """The platform's own post: hook, body (the platform rewrite when it passed checks), source, credit, hashtags.
+    Always within the platform limit; the photo credit and source are kept, the body is what gets trimmed."""
     cfg = cfg or load_config()
     limit = cfg.get("caption_limits", {}).get(platform, 1800)
+    style = cfg.get("platform_style", {}).get(platform, {})
     url = page_url or (draft.source_urls[0] if draft.source_urls else "")
     name = source_name(url, cfg) if url else ""
+    if "google.com" in name and draft.source_label:  # aggregator link: name the real outlet
+        name = draft.source_label
 
     tags_cfg = cfg.get("hashtags", {})
     brand_tag = cfg.get("brand", {}).get("hashtag", "#HaqqReport")
     topic_tags = [tags_cfg[k] for k in topic_keys(f"{draft.headline} {draft.body}", cfg)]
     lead = list(draft.tags) + ([CATEGORY_TAGS[draft.category]] if draft.category in CATEGORY_TAGS else [])
     lead = list(dict.fromkeys(lead + topic_tags))
-    tags = [lead[0] if lead else brand_tag] if platform == "threads" else lead[:2] + [brand_tag]
+    n_tags = style.get("hashtags", 3)
+    tags = [lead[0] if lead else brand_tag] if n_tags <= 1 else lead[: n_tags - 1] + [brand_tag]
 
-    source_lines = [f"Source: {name}"] if name else []
-    if url and platform in LINK_IN_CAPTION:
-        source_lines.append(url)
+    lines = [f"Source: {name}"] if name else []
+    link = url if (platform in LINK_IN_CAPTION and url and "news.google.com" not in url and len(url) <= 100) else ""
     if draft.photo_credit:
-        source_lines.append(draft.photo_credit)
-    foot = "\n\n".join(p for p in ["\n".join(source_lines), " ".join(dict.fromkeys(tags))] if p)
+        lines.append(draft.photo_credit)
+    foot = "\n\n".join(p for p in ["\n".join(lines), " ".join(dict.fromkeys(tags))] if p)
+    cta = style.get("cta", "")
 
-    head = kicker(draft) + fit(draft.headline, max(40, limit // 4))
-    budget = limit - len(head) - len(foot) - 4
-    body = fit(draft.body, budget) if budget >= 60 else ""
-    return "\n\n".join(p for p in [head, body, foot] if p)
+    head = kicker(draft) + fit(draft.headline, style.get("hook_chars", max(40, limit // 4)))
+    body_src = draft.variants.get(platform) or draft.body
+    extras = [x for x in (cta, link) if x]
+    fixed = len(head) + len(foot) + sum(len(x) + 2 for x in extras) + 4
+    if fixed > limit and link:  # no room for the link: the source name still names the outlet
+        extras = [x for x in extras if x != link]
+        fixed = len(head) + len(foot) + sum(len(x) + 2 for x in extras) + 4
+    budget = limit - fixed
+    body = fit(body_src, budget) if budget >= 60 else ""
+    text = "\n\n".join(p for p in [head, body, cta, link if link in extras else "", foot] if p)
+    if len(text) > limit:  # last resort: shorten the hook, never the credit or source
+        head = fit(head, max(20, limit - len(foot) - 2))
+        text = "\n\n".join(p for p in [head, foot] if p)
+    return text[:limit]

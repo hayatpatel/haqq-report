@@ -66,18 +66,21 @@ class Draft:
     label: str = ""  # e.g. "On-ground report: reported by NAME, not independently confirmed yet"
     flags: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)  # hashtags that replace the automatic topic tags (e.g. a celebrity)
+    source_label: str = ""  # outlet name as ingested (needed when the URL is an aggregator link)
+    variants: dict = field(default_factory=dict)  # per-platform body text (variants.py), made at publish time
     photo_credit: str = ""  # set at publish time when a licensed photo is used; written into every caption
 
     def packed_flags(self) -> list[str]:
         """Flags plus category and tags, so they survive in the drafts table without new columns."""
-        extra = [f"cat:{self.category}"] + [f"tag:{t}" for t in self.tags]
-        return [f for f in self.flags if not f.startswith(("cat:", "tag:"))] + extra
+        extra = [f"cat:{self.category}"] + [f"tag:{t}" for t in self.tags] + ([f"src:{self.source_label}"] if self.source_label else [])
+        return [f for f in self.flags if not f.startswith(("cat:", "tag:", "src:"))] + extra
 
     @classmethod
     def from_row(cls, row: dict) -> "Draft":
         flags = list(row.get("flags") or [])
         cat = next((f[4:] for f in flags if f.startswith("cat:")), "general")
         tags = [f[4:] for f in flags if f.startswith("tag:")]
+        src = next((f[4:] for f in flags if f.startswith("src:")), "")
         return cls(headline=row["headline"], body=row["body"], lane=Lane(row["lane"]), category=cat,
                    source_urls=row.get("sources") or [], label=row.get("label") or "",
-                   flags=[f for f in flags if not f.startswith(("cat:", "tag:"))], tags=tags)
+                   flags=[f for f in flags if not f.startswith(("cat:", "tag:", "src:"))], tags=tags, source_label=src)

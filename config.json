@@ -1,5 +1,11 @@
 {
   "photos": {"enabled": true, "war_min_year": 2024, "min_width": 1200, "min_height": 800},
+  "platform_style": {
+    "enabled": true,
+    "facebook": {"max_chars": 700, "hashtags": 3},
+    "instagram": {"max_chars": 600, "hashtags": 5, "hook_chars": 120, "cta": "Save this post for reference."},
+    "threads": {"max_chars": 300, "hashtags": 1}
+  },
   "ai_art": {"enabled": true, "max_per_day": 40},
   "stories": {"max_per_day": 30},
   "brand": {

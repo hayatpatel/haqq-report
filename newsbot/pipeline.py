@@ -58,7 +58,8 @@ def make_draft(article: Article, claims: list, label: str, ai_call: Callable[[st
     body = body.strip() or headline
     headline, body = safety.strip_emoji(headline), safety.strip_emoji(body)  # dignity rule: no emoji, ever
     return Draft(headline=headline, body=body, claims=claims, source_urls=[article.url, *article.related_urls],
-                 label=label, category=category, tags=list(tags or []), flags=list(flags or []))
+                 label=label, category=category, tags=list(tags or []), flags=list(flags or []),
+                 source_label=article.source_name)
 
 
 def process_article(article: Article, ai_call: Callable[[str], str], cfg: dict | None = None, *,
@@ -141,6 +142,10 @@ def publish_draft(draft: Draft, image_url: str = "", *, dry_run: bool = True,
             if res.ok:
                 page_url = cfg["site"].get("base_url", "").rstrip("/") + res.post_id
 
+    if not dry_run and not draft.variants:
+        from . import ai, variants
+        src = template.source_name(draft.source_urls[0], cfg) if draft.source_urls else ""
+        draft.variants = variants.adapt(draft, ai.generate, cfg, src)
     media = cards.Media(feed_url=image_url)
     if not dry_run and not image_url and any(platform_enabled(p, cfg) for p in
                                              ("facebook", "instagram", "threads", "facebook_story", "instagram_story")):

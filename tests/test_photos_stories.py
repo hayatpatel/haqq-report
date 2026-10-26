@@ -123,3 +123,29 @@ def test_ai_art_falls_back_and_stops_when_free_allowance_is_gone(monkeypatch):
     monkeypatch.setattr(ai_art.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no call after off")))
     assert ai_art.generate("GAZA", cfg, store)[0] is None
     assert "no people" in ai_art.prompt_for("GAZA") and "Gaza" not in ai_art.prompt_for("GAZA")
+
+
+def test_every_platform_caption_fits_even_with_credit_and_long_google_link():
+    from newsbot import variants
+    d = Draft(headline="Mohamed Salah at the centre of Turkish religious controversy", body="Reports say " + "x" * 900,
+              source_urls=["https://news.google.com/rss/articles/" + "A" * 300], category="celebrity", tags=["#MohamedSalah"], source_label="Al Jazeera",
+              photo_credit="AI-generated illustration (not a photo of the event)")
+    for platform in ("facebook", "instagram", "threads"):
+        text = template.build_caption(d, platform, cfg=CFG)
+        assert len(text) <= CFG["caption_limits"][platform] and "AI-generated illustration" in text and "#HaqqReport" in text or platform == "threads"
+    assert len(template.build_caption(d, "threads", cfg=CFG)) <= 480
+    assert "news.google.com" not in template.build_caption(d, "threads", cfg=CFG)
+    assert "Source: Al Jazeera" in template.build_caption(d, "facebook", cfg=CFG)
+    assert template.build_caption(d, "instagram", cfg=CFG).count("#") <= 5
+
+
+def test_platform_variants_are_checked_and_used():
+    from newsbot import variants
+    d = Draft(headline="Aid reaches Gaza", body="OCHA said 40 trucks crossed on Thursday.", source_urls=["https://news.un.org/x"])
+    out = variants.adapt(d, lambda p: '{"facebook": "OCHA said 40 trucks crossed. What will this change for families?", '
+                                      '"instagram": "Like if you care! 40 trucks crossed.", "threads": "OCHA says 90 trucks crossed."}', CFG)
+    assert list(out) == ["facebook"]  # instagram = engagement bait, threads = invented number
+    d.variants = out
+    assert "What will this change" in template.build_caption(d, "facebook", cfg=CFG)
+    assert "OCHA said 40 trucks crossed on Thursday." in template.build_caption(d, "threads", cfg=CFG)  # fallback body
+    assert variants.adapt(d, lambda p: "not json", CFG) == {}

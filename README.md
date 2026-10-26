@@ -352,3 +352,10 @@ See [docs/status.md](docs/status.md) for plan versus build.
 - Stories need `instagram_business_content_publish` (Instagram) and Page `pages_manage_posts` (Facebook).
 - **War zones** (Gaza, Sudan, Yemen, Syria): only photos of destruction taken in 2024 or later (`photos.war_min_year`) are used, so a calm skyline never illustrates a story about a catastrophe. No match means the brand card, not an old photo.
 - **AI illustration fallback** (`newsbot/ai_art.py`): only when no licensed photo exists. Free Cloudflare Workers AI (FLUX.1 schnell), fixed symbolic prompts (no people, places, flags or text), labelled "AI-generated illustration" on the image and in the caption. Own budget `ai_art.max_per_day` (40); when Cloudflare's free allowance is used up the bot stops until the next day and uses the plain brand card. Secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`. Feed cards are 1080x1350 (4:5).
+
+## One post, written for each platform
+`newsbot/variants.py` rewrites each verified draft separately for Facebook, Instagram and Threads (one extra free AI call). Only the facts of the draft are allowed; code rejects any rewrite with a new number, a link, emoji, hashtags, engagement bait ("like if", "tag a friend") or a lost on-ground label, and that platform then uses the standard body.
+- **Facebook**: headline, two short paragraphs, optional open question, 3 hashtags; the source link goes in the first comment (link posts reach less); native image.
+- **Instagram**: first line is a hook (under about 120 characters, the part visible before "more"), short lines, 5 hashtags, a soft "save" line, no links; 4:5 image; story for every post.
+- **Threads**: short and conversational, one topic tag (Threads uses a single tag as a topic), real outlet link when short.
+Settings: `platform_style` in `config.json`. Every caption is fitted to its limit with the source and photo credit kept (the Threads "caption too long" error came from a long Google News link plus the credit line). For Google News items the real outlet name is shown, not news.google.com.
