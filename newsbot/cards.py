@@ -155,6 +155,7 @@ def render_layout(draft: Draft, cfg: dict, size: tuple[int, int], photo: bytes |
 
     w, h = size
     img = _cover(photo, w, h) if photo else Image.new("RGB", (w, h), BG)
+    ai_label = credit.startswith("AI-generated")
     d = ImageDraw.Draw(img)
     brand = cfg.get("brand", {})
     m, tall = 80, h > w
@@ -162,13 +163,15 @@ def render_layout(draft: Draft, cfg: dict, size: tuple[int, int], photo: bytes |
     d.rectangle([0, 0, w, 14], fill=GOLD)
     d.text((m, top), brand.get("card_name", "HAQQ REPORT"), font=_font(SANS, 40), fill=GOLD)
     d.text((m, top + 52), f"{datetime.now(timezone.utc):%d %b %Y}".lstrip("0"), font=_font(SANS, 26), fill=WHITE)
+    if ai_label:  # disclosure on the image itself, so it survives screenshots and reshares
+        d.text((m, top + 92), "AI-GENERATED ILLUSTRATION", font=_font(SANS, 22), fill=(220, 200, 140))
     topic, bf = template.badge(draft, cfg), _font(SANS, 28)
     tw = d.textlength(topic, font=bf)
     d.rounded_rectangle([w - m - tw - 40, top - 8, w - m, top + 42], radius=25, fill=GOLD)
     d.text((w - m - tw - 20, top), topic, font=bf, fill=BG)
 
     text, max_w = draft.headline.strip(), w - 2 * m
-    max_h = 760 if tall else 480
+    max_h = int(h * 0.4) if tall else 480
     for size_pt in range(84, 35, -4):
         font = _font(SERIF, size_pt)
         lines = _wrap(d, text, font, max_w)
@@ -193,7 +196,7 @@ def render_layout(draft: Draft, cfg: dict, size: tuple[int, int], photo: bytes |
     d.text((m, foot_y), brand.get("hashtag", "#HaqqReport"), font=small, fill=GOLD)
     footer = brand.get("footer", "")
     d.text((w - m - d.textlength(footer, font=small), foot_y), footer, font=small, fill=MUTED)
-    if credit and tall:  # stories have no caption, so the photo credit is printed on the image
+    if credit and h >= 1800:  # stories have no caption, so the photo credit is printed on the image
         cf = _font(SANS, 22)
         d.text((m, foot_y + 50), template.fit(credit, 86), font=cf, fill=(200, 205, 200))
     buf = io.BytesIO()
@@ -209,18 +212,26 @@ def build(draft: Draft, cfg: dict | None = None, store=None) -> Media:
     media = Media()
     if not cfg.get("cards", {}).get("enabled", True):
         return media
+    from . import ai_art
+
     photo = photos.pick(draft.headline, draft.body, draft.flags, draft.category, cfg, store)
-    if photo:
+    art = None
+    if not photo:
+        art, note = ai_art.generate(template.badge(draft, cfg), cfg, store)
+        media.notes.append(note)
+    if art:
+        media.credit = "AI-generated illustration (not a photo of the event)"
+    elif photo:
         media.credit = photo.credit()
         media.notes.append(f"photo: {photo.title.replace('File:', '')[:50]} ({photo.license})")
     else:
         media.notes.append("photo: none found, brand card used")
     stem = f"{datetime.now(timezone.utc):%Y-%m-%d}/{hashlib.sha1(draft.headline.encode()).hexdigest()[:12]}"
-    for kind, size, suffix in (("feed", (SIZE, SIZE), ""), ("story", (SIZE, 1920), "-s")):
+    for kind, size, suffix in (("feed", (SIZE, 1350), ""), ("story", (SIZE, 1920), "-s")):
         if kind == "story" and not (cfg.get("enable", {}).get("facebook_story") or cfg.get("enable", {}).get("instagram_story")):
             continue
         try:
-            data = render_layout(draft, cfg, size, photo.data if photo else None, media.credit)
+            data = render_layout(draft, cfg, size, art or (photo.data if photo else None), media.credit)
             url = upload(data, f"{stem}{suffix}.jpg")
             setattr(media, f"{kind}_url", url)
         except Exception as exc:  # noqa: BLE001 - a missing card must never block a post

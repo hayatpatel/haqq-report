@@ -43,6 +43,7 @@ def run(store, cfg: dict) -> dict:
     day = (now - timedelta(days=3)).strftime("%Y-%m-%d")
     stat_day = (now - timedelta(days=ret.get("stats_days", 60))).strftime("%Y%m%d")
     out["settings"] = store.delete("settings", {"and": f"(key.like.celeb:*,key.lt.celeb:{day})"}) + \
-        store.delete("settings", {"and": f"(key.like.stat:*,key.lt.stat:{stat_day})"})
+        store.delete("settings", {"and": f"(key.like.stat:*,key.lt.stat:{stat_day})"}) + \
+        store.delete("settings", {"and": f"(key.like.ai:*,key.lt.ai:{(now - timedelta(days=3)):%Y%m%d})"})
     log.info("cleanup removed %s", out)
     return out

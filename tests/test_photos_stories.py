@@ -43,7 +43,7 @@ def test_caption_carries_photo_credit_within_limit():
 def test_story_and_feed_cards_have_right_size():
     from io import BytesIO
     from PIL import Image
-    for size in ((1080, 1080), (1080, 1920)):
+    for size in ((1080, 1350), (1080, 1920)):
         img = Image.open(BytesIO(cards.render_layout(D, CFG, size, None, "Representative photo: X / Wikimedia Commons, CC0")))
         assert img.size == size
     photo = BytesIO(); Image.new("RGB", (1600, 900), (200, 50, 50)).save(photo, "JPEG")
@@ -105,3 +105,21 @@ def test_gaza_needs_recent_destruction_photos(monkeypatch):
     monkeypatch.setattr(photos.requests, "get", lambda *a, **k: R())
     assert photos.search("Gaza rubble", "gaza", CFG, set(), war=True).title == "File:Gaza rubble of destroyed buildings.jpg"
     assert photos.queries("Aid reaches Gaza City", "", [])[0][0] == "Gaza City destroyed buildings"
+
+
+def test_ai_art_falls_back_and_stops_when_free_allowance_is_gone(monkeypatch):
+    from newsbot import ai_art
+    store = type("S", (), {"d": {}, "get_setting": lambda s, k, d=None: s.d.get(k, d),
+                           "set_setting": lambda s, k, v: s.d.__setitem__(k, v)})()
+    cfg = {"ai_art": {"enabled": True, "max_per_day": 2}}
+    assert ai_art.generate("GAZA", cfg, store)[0] is None  # no keys: brand card
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "a"); monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "t")
+
+    class R:
+        status_code = 429; text = "daily free allocation"
+    monkeypatch.setattr(ai_art.requests, "post", lambda *a, **k: R())
+    img, note = ai_art.generate("GAZA", cfg, store)
+    assert img is None and "used up" in note and store.d[ai_art._day()] == "off"
+    monkeypatch.setattr(ai_art.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no call after off")))
+    assert ai_art.generate("GAZA", cfg, store)[0] is None
+    assert "no people" in ai_art.prompt_for("GAZA") and "Gaza" not in ai_art.prompt_for("GAZA")

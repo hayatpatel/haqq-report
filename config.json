@@ -1,5 +1,6 @@
 {
   "photos": {"enabled": true, "war_min_year": 2024, "min_width": 1200, "min_height": 800},
+  "ai_art": {"enabled": true, "max_per_day": 40},
   "stories": {"max_per_day": 30},
   "brand": {
     "card_name": "HAQQ REPORT",
