@@ -320,3 +320,19 @@ Red stories are posted like the rest (`red_needs_approval: false` in `config.jso
 - `listen.yml` keeps a long-polling connection to Telegram, so commands such as `/fbtoken` and `/tokenstatus` get an answer in seconds (better than every 5 minutes). GitHub often skips frequent schedules, so instead of a 5-minute cron the listener stays alive for 3 hours 50 minutes, and a new one starts every 3 hours and replaces the old one. Idle listeners store and send no logs. Public repo, so the minutes are free.
 - `approvals.yml` is now a manual one-off check only (do not run it while the listener is active; Telegram allows one reader at a time).
 - After deploying, start the listener once by hand (Actions, **listen**, Run workflow); after that the schedule keeps it going.
+
+## Fast track, celebrities, Islamophobia and reach
+
+**Fast track** (`fasttrack.py`, runs inside the listener every 5 minutes): fetches the fast sources (`"fast": true` in `data/sources.seed.json`), keeps stories under 3 hours old that are on mission and rated severity 2 or 3 by `severity.py` (mass casualties, ceasefire changes, ICJ/ICC rulings, famine declarations, attacks on mosques or protected sites, and so on), ranks them (severity, tier, newest) and posts the best 2 per cycle, at most 6 a day, ahead of the queue. Critical ones carry **BREAKING:**. One trusted Tier A/B source is enough. Fast posts may exceed the daily cap by `extra_daily_posts` (4). Stop it with `/fast off`.
+
+**No duplicates** (the fast track uses the same database guards as the 4-hour run): each article is claimed atomically in the database before processing; a headline similar to any draft of the last 72 hours is skipped; each draft is claimed before posting; one post per platform per draft is enforced by a unique index.
+
+**Celebrities** (`celebrity.py`): a watchlist in `config.json` (edit in Telegram with `/celeb list`, `/celeb add NAME`, `/celeb remove NAME`). The headline must name the person; the event must be notable (match, award, signing, statement, charity) from a trusted outlet; gossip, relationships and health rumours are blocked. **One post per person per day (IST)**, combining every outlet's report of the day. A second post, labelled **UPDATE:**, only for critical news (death, arrest, major title, retirement), at most once a day. The day lock is a database row, so two jobs cannot both post the same person.
+
+**Islamophobia Watch** (`islamophobia.py`): Google News searches (islamophobia, mosque attacks, hijab and bans, Quran desecration; only trusted publishers count), CAIR and Tell MAMA (labelled "reported by", Tier C). One slot per run is reserved for it, as for Palestine. Drafting rules: say what happened, where and who reported it; no motive guessing, no suspect description unless police or a court gave it, no generalising about any community.
+
+**Reach**: `insights.py` reads engagement per post (Facebook reactions, comments, shares; Threads views, likes, replies, reposts; Instagram reach, likes, saves, shares) and keeps a small record for 60 days. Every Monday after 09:00 IST you get a Telegram report with the best posting hours, topics and platforms and the top posts. Threads and Instagram insights need the insights permission on their tokens; if missing, the report shows what it could read. Use the report to move the 4-hour run times in `ingest.yml` to your peak hours.
+
+**Telegram commands**: `/status`, `/pause`, `/resume`, `/fast on|off`, `/celeb ...`, `/fbtoken`, `/tokenstatus`, `/help`.
+
+See [docs/status.md](docs/status.md) for plan versus build.

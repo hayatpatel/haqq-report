@@ -108,7 +108,7 @@ def publish_url(draft: Draft, cfg: dict | None = None) -> str:
         return ""
     try:
         text = f"{draft.headline} {draft.body}"
-        data = render(draft.headline, template.topic_label(text, cfg),
+        data = render(draft.headline, template.badge(draft, cfg),
                       cfg.get("brand", {}).get("card_name", "HAQQ REPORT"), cfg.get("brand", {}).get("footer", ""))
         name = f"{datetime.now(timezone.utc):%Y-%m-%d}/{hashlib.sha1(draft.headline.encode()).hexdigest()[:12]}.jpg"
         return upload(data, name)

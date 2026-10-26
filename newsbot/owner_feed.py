@@ -67,7 +67,7 @@ def _post_link(r) -> str:
 
 
 def post_results(headline: str, results: Iterable, *, dry_run: bool, cfg: dict | None = None,
-                 lane: str = "", source: str = "", note: str = "") -> None:
+                 lane: str = "", source: str = "", note: str = "", tag: str = "") -> None:
     """One message per story: status line, headline, one line per platform, source."""
     if not _enabled("posts", cfg):
         return
@@ -84,6 +84,8 @@ def post_results(headline: str, results: Iterable, *, dry_run: bool, cfg: dict |
         status = "✅ POSTED"
     else:
         status = "❌ NOT POSTED"
+    if tag:
+        status += f" · {tag}"
     if lane:
         status += f" · {lane.upper()}"
     lines = [status, headline[:140], ""]
@@ -149,7 +151,7 @@ def send_log(path: Path, caption: str = "") -> bool:
 
 _LABELS = {"fetched": "Fetched", "new": "New", "stored": "Stored", "published": "Posted", "needs_approval": "Awaiting you",
            "publish_failed": "Failed", "skipped": "Skipped", "held": "Held", "duplicate": "Duplicates",
-           "retried": "Retried", "queued": "Queued for next run", "cleaned": "Cleaned from DB", "over_daily_limit": "Over daily limit",
+           "fast_posted": "Fast track posts", "retried": "Retried", "queued": "Queued for next run", "cleaned": "Cleaned from DB", "over_daily_limit": "Over daily limit",
            "handled": "Taps handled", "errors": "Errors"}
 
 

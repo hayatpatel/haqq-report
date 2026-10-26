@@ -96,3 +96,13 @@ def debug_page_token() -> dict:
         "access_token": f"{env['FB_APP_ID']}|{env['FB_APP_SECRET']}",
     })
     return out.get("data", out)
+
+
+def metrics(post_id: str) -> dict:
+    """Public engagement counts for a Page post (reactions, comments, shares)."""
+    _, token = _creds()
+    out = graph_request("GET", f"{_base()}/{post_id}", params={
+        "fields": "reactions.summary(true).limit(0),comments.summary(true).limit(0),shares", "access_token": token})
+    return {"reactions": out.get("reactions", {}).get("summary", {}).get("total_count", 0),
+            "comments": out.get("comments", {}).get("summary", {}).get("total_count", 0),
+            "shares": out.get("shares", {}).get("count", 0)}

@@ -6,6 +6,8 @@
 > (for example, the Meta setup uses the owner's personal account as root and a single Meta app, which supersedes
 > the "do not link to your personal profile" line in section 1).
 
+> Build status against this plan: see [status.md](status.md).
+
 ## 0. Five rules that protect the project
 
 1. **Truth beats speed.** One false viral post about Gaza, or about Islam, destroys years of trust. Every claim must be attributed and checked.

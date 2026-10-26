@@ -95,6 +95,39 @@ class Store:
         resp.raise_for_status()
         return len(resp.json()) == 1
 
+    def claim_flag(self, table: str, row_id, column: str, from_value, to_value) -> bool:
+        """Atomically flip a boolean column (e.g. articles.processed false -> true). True for the one winner."""
+        headers = {**self.headers, "Prefer": "return=representation"}
+        resp = requests.patch(f"{self.base}/{table}", headers=headers,
+                              params={"id": f"eq.{row_id}", column: f"eq.{str(from_value).lower()}"},
+                              json={column: to_value}, timeout=30)
+        resp.raise_for_status()
+        return len(resp.json()) == 1
+
+    def try_insert(self, table: str, row: dict) -> bool:
+        """Insert; False when the primary key / unique index already exists. Used as a lock."""
+        headers = {**self.headers, "Prefer": "return=minimal"}
+        resp = requests.post(f"{self.base}/{table}", headers=headers, json=row, timeout=30)
+        if resp.status_code == 409:
+            return False
+        resp.raise_for_status()
+        return True
+
+    def get_setting(self, key: str, default: str = "") -> str:
+        rows = self.select_raw("settings", {"key": f"eq.{key}"})
+        return rows[0]["value"] if rows else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        self.upsert("settings", {"key": key, "value": value}, "key")
+
+    def cas_setting(self, key: str, old: str, new: str) -> bool:
+        """Compare-and-swap on a settings value: True only if the value was still `old`."""
+        headers = {**self.headers, "Prefer": "return=representation"}
+        resp = requests.patch(f"{self.base}/settings", headers=headers, params={"key": f"eq.{key}", "value": f"eq.{old}"},
+                              json={"value": new}, timeout=30)
+        resp.raise_for_status()
+        return len(resp.json()) == 1
+
     def check(self) -> list[tuple[str, bool, str]]:
         """Connection test: can we read every required table? Returns (table, ok, detail)."""
         out = []

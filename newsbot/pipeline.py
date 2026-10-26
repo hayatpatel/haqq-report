@@ -10,7 +10,8 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from . import claims as claims_mod
-from . import cards, safety, template, verify
+from . import cards, islamophobia, safety, template, verify
+from . import celebrity as celeb_mod
 from .config import load_config, platform_enabled
 from .models import Article, Draft, Lane, Tier
 from .publish import bluesky, instagram, meta_fb, threads
@@ -29,7 +30,7 @@ Rules:
 - No collective blame, no inflammatory language, no praise of any armed group.
 - No emoji. Max 600 characters. First line is a plain headline.
 - Use only facts and numbers present in the text below.
-
+{extra_rules}
 SOURCE: {source}
 TITLE: {title}
 TEXT: {text}
@@ -45,20 +46,39 @@ class Outcome:
     results: list[PublishResult] = field(default_factory=list)
 
 
-def make_draft(article: Article, claims: list, label: str, ai_call: Callable[[str], str]) -> Draft:
+def make_draft(article: Article, claims: list, label: str, ai_call: Callable[[str], str], *,
+               category: str = "general", extra_rules: str = "", tags: list[str] | None = None,
+               flags: list[str] | None = None) -> Draft:
     label_rule = f'- Begin the body with this label verbatim: "{label}"\n' if label else ""
     raw = ai_call(DRAFT_PROMPT.format(source=article.source_name, title=article.title,
-                                      text=article.summary[:4000], label_rule=label_rule)).strip()
+                                      text=article.summary[:4000], label_rule=label_rule,
+                                      extra_rules=extra_rules)).strip()
     headline, _, body = raw.partition("\n")
     headline = safety.clean_headline(headline)
     body = body.strip() or headline
     headline, body = safety.strip_emoji(headline), safety.strip_emoji(body)  # dignity rule: no emoji, ever
-    return Draft(headline=headline, body=body, claims=claims, source_urls=[article.url], label=label)
+    return Draft(headline=headline, body=body, claims=claims, source_urls=[article.url, *article.related_urls],
+                 label=label, category=category, tags=list(tags or []), flags=list(flags or []))
 
 
-def process_article(article: Article, ai_call: Callable[[str], str], cfg: dict | None = None) -> Outcome:
-    """Run one article through claims, verification, drafting, lane and checks. Does NOT publish."""
+def process_article(article: Article, ai_call: Callable[[str], str], cfg: dict | None = None, *,
+                    category: str | None = None, extra_rules: str = "", tags: list[str] | None = None,
+                    flags: list[str] | None = None) -> Outcome:
+    """Run one article through claims, verification, drafting, lane and checks. Does NOT publish.
+
+    A single Tier A or B source is enough (verify.evaluate_claim); that is also what the fast track relies on."""
     cfg = cfg or load_config()
+    text_all = f"{article.title} {article.summary}"
+    tags, flags = list(tags or []), list(flags or [])
+    if islamophobia.is_islamophobia(text_all):
+        if "#Islamophobia" not in tags:
+            tags.append("#Islamophobia")
+        if islamophobia.RULES not in extra_rules:
+            extra_rules += islamophobia.RULES + "\n"
+        category = category or "islamophobia"
+    category = category or "general"
+    if category == "breaking":
+        extra_rules += "- This is breaking news: say clearly what is confirmed and by whom; do not speculate about causes or who is responsible.\n"
     min_tier = Tier(cfg["limits"]["VERIFY_MIN_TIER"])
 
     found = claims_mod.extract_claims(article, ai_call)
@@ -76,7 +96,8 @@ def process_article(article: Article, ai_call: Callable[[str], str], cfg: dict |
     draft = None
     failures: list[str] = []
     for _attempt in range(2):  # retry once, then skip
-        draft = make_draft(article, found, label, ai_call)
+        draft = make_draft(article, found, label, ai_call, category=category, extra_rules=extra_rules,
+                           tags=tags, flags=flags)
         result = safety.check_draft(draft, source_text, cfg)
         if result.ok:
             break
@@ -125,11 +146,12 @@ def publish_draft(draft: Draft, image_url: str = "", *, dry_run: bool = True,
         # From here the post EXISTS. Nothing below may raise, or the retry would post it a second time.
         if draft.source_urls:
             try:
-                meta_fb.first_comment(post_id, "Source: " + draft.source_urls[0])
+                meta_fb.first_comment(post_id, ("Sources:\n" + "\n".join(draft.source_urls[:3])) if len(draft.source_urls) > 1
+                                      else "Source: " + draft.source_urls[0])
             except Exception as exc:  # noqa: BLE001 - usually a missing pages_manage_engagement permission
                 log.warning("facebook source comment failed (%s); adding the link to the caption instead", str(exc)[:120])
                 try:
-                    meta_fb.update_message(post_id, caption + "\n" + draft.source_urls[0])
+                    meta_fb.update_message(post_id, caption + "\n" + "\n".join(draft.source_urls[:3]))
                 except Exception as exc2:  # noqa: BLE001
                     log.warning("facebook caption update failed too: %s", str(exc2)[:120])
         return post_id
@@ -160,6 +182,7 @@ def publish_draft(draft: Draft, image_url: str = "", *, dry_run: bool = True,
             except Exception:  # noqa: BLE001 - best effort
                 pass
         results.append(res)
-    owner_feed.post_results(draft.headline, results, dry_run=dry_run, cfg=cfg, lane=draft.lane.value, note=", ".join(draft.flags),
+    owner_feed.post_results(draft.headline, results, dry_run=dry_run, cfg=cfg, lane=draft.lane.value, note=", ".join(f for f in draft.flags if f not in ("update",)),
+                            tag=("FAST TRACK" if draft.category in ("breaking", "celebrity") else draft.category.upper() if draft.category != "general" else ""),
                             source=template.source_name(draft.source_urls[0], cfg) if draft.source_urls else "")
     return results

@@ -5,7 +5,8 @@ import pytest
 from newsbot import approvals, owner_feed, pipeline
 from newsbot.publish.base import PublishResult
 
-CFG = {"limits": {"MAX_POSTS_PER_DAY": 2, "INGEST_MAX_AGE_HOURS": 48}, "approvals": {"max_age_hours": 24}}
+CFG = {"limits": {"MAX_POSTS_PER_DAY": 2, "INGEST_MAX_AGE_HOURS": 48}, "approvals": {"max_age_hours": 24},
+       "fast_track": {"enabled": False}}
 
 
 class Store:

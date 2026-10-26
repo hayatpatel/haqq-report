@@ -1,31 +1,268 @@
 {
   "_note": "Starter source registry (plan section 4). Feed URLs are best-known defaults: verify each one resolves and check its licence before relying on it. Tier D is never listed here. Creators are vetted separately (score 7+ to accept).",
   "sources": [
-    {"name": "UN News", "tier": "A", "language": "en", "country": "UN", "feed": "https://news.un.org/feed/subscribe/en/news/all/rss.xml", "funding": "UN member states", "bias_note": "Institutional voice", "priority": true},
-    {"name": "UN OCHA (ReliefWeb)", "tier": "A", "language": "en", "country": "UN", "feed": "", "api": "https://api.reliefweb.int/v1/reports", "funding": "UN member states", "bias_note": "Humanitarian situation reports; ReliefWeb API requires a registered appname", "priority": true},
-    {"name": "UNRWA", "tier": "A", "language": "en", "country": "UN", "feed": "", "funding": "UN member states", "bias_note": "Situation reports on Palestine refugees", "priority": true},
-    {"name": "UNHCR", "tier": "A", "language": "en", "country": "UN", "feed": "", "funding": "UN member states", "bias_note": "Refugee data portal"},
-    {"name": "WHO Emergencies", "tier": "A", "language": "en", "country": "UN", "feed": "", "funding": "UN member states", "bias_note": "Health emergencies"},
-
-    {"name": "Al Jazeera English", "tier": "B", "language": "en", "country": "QA", "feed": "https://www.aljazeera.com/xml/rss/all.xml", "state_funded": true, "funding": "Qatar state", "bias_note": "State-funded: label honestly", "priority": true},
-    {"name": "Middle East Eye", "tier": "B", "language": "en", "country": "UK", "feed": "https://www.middleeasteye.net/rss", "funding": "Independent", "bias_note": "Editorial line sympathetic to region", "priority": true},
-    {"name": "Reuters World", "tier": "B", "language": "en", "country": "UK", "feed": "", "funding": "Thomson Reuters", "bias_note": "Wire service; confirm an allowed feed route"},
-    {"name": "BBC News Middle East", "tier": "B", "language": "en", "country": "UK", "feed": "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml", "state_funded": true, "funding": "UK licence fee", "bias_note": "Public broadcaster"},
-    {"name": "The Guardian Middle East", "tier": "B", "language": "en", "country": "UK", "feed": "https://www.theguardian.com/world/middleeast/rss", "funding": "Guardian Media Group trust", "bias_note": ""},
-    {"name": "Anadolu Agency", "tier": "B", "language": "en", "country": "TR", "feed": "", "state_funded": true, "funding": "Turkish state-linked", "bias_note": "State-linked: label honestly"},
-    {"name": "The New Arab", "tier": "B", "language": "en", "country": "UK", "feed": "", "funding": "Fadaat Media", "bias_note": "Qatar-linked ownership reported; label as appropriate"},
-    {"name": "+972 Magazine", "tier": "B", "language": "en", "country": "IL", "feed": "https://www.972mag.com/feed/", "funding": "Independent / grants", "bias_note": "Israeli-Palestinian left outlet"},
-    {"name": "Mondoweiss", "tier": "B", "language": "en", "country": "US", "feed": "https://mondoweiss.net/feed/", "funding": "Donations", "bias_note": "Advocacy-leaning"},
-    {"name": "Dawn", "tier": "B", "language": "en", "country": "PK", "feed": "https://www.dawn.com/feeds/home", "funding": "Dawn Media Group", "bias_note": ""},
-    {"name": "Arab News", "tier": "B", "language": "en", "country": "SA", "feed": "", "state_funded": true, "funding": "Saudi-linked", "bias_note": "State-linked: label honestly"},
-
-    {"name": "CPJ", "tier": "A", "language": "en", "country": "US", "feed": "https://cpj.org/feed/", "funding": "Donations", "bias_note": "Journalist-safety data (killed, jailed)"}
+    {
+      "name": "UN News",
+      "tier": "A",
+      "language": "en",
+      "country": "UN",
+      "feed": "https://news.un.org/feed/subscribe/en/news/all/rss.xml",
+      "funding": "UN member states",
+      "bias_note": "Institutional voice",
+      "priority": true,
+      "fast": true
+    },
+    {
+      "name": "UN OCHA (ReliefWeb)",
+      "tier": "A",
+      "language": "en",
+      "country": "UN",
+      "feed": "",
+      "api": "https://api.reliefweb.int/v1/reports",
+      "funding": "UN member states",
+      "bias_note": "Humanitarian situation reports; ReliefWeb API requires a registered appname",
+      "priority": true
+    },
+    {
+      "name": "UNRWA",
+      "tier": "A",
+      "language": "en",
+      "country": "UN",
+      "feed": "",
+      "funding": "UN member states",
+      "bias_note": "Situation reports on Palestine refugees",
+      "priority": true
+    },
+    {
+      "name": "UNHCR",
+      "tier": "A",
+      "language": "en",
+      "country": "UN",
+      "feed": "",
+      "funding": "UN member states",
+      "bias_note": "Refugee data portal"
+    },
+    {
+      "name": "WHO Emergencies",
+      "tier": "A",
+      "language": "en",
+      "country": "UN",
+      "feed": "",
+      "funding": "UN member states",
+      "bias_note": "Health emergencies"
+    },
+    {
+      "name": "Al Jazeera English",
+      "tier": "B",
+      "language": "en",
+      "country": "QA",
+      "feed": "https://www.aljazeera.com/xml/rss/all.xml",
+      "state_funded": true,
+      "funding": "Qatar state",
+      "bias_note": "State-funded: label honestly",
+      "priority": true,
+      "fast": true
+    },
+    {
+      "name": "Middle East Eye",
+      "tier": "B",
+      "language": "en",
+      "country": "UK",
+      "feed": "https://www.middleeasteye.net/rss",
+      "funding": "Independent",
+      "bias_note": "Editorial line sympathetic to region",
+      "priority": true,
+      "fast": true
+    },
+    {
+      "name": "Reuters World",
+      "tier": "B",
+      "language": "en",
+      "country": "UK",
+      "feed": "",
+      "funding": "Thomson Reuters",
+      "bias_note": "Wire service; confirm an allowed feed route"
+    },
+    {
+      "name": "BBC News Middle East",
+      "tier": "B",
+      "language": "en",
+      "country": "UK",
+      "feed": "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml",
+      "state_funded": true,
+      "funding": "UK licence fee",
+      "bias_note": "Public broadcaster",
+      "fast": true
+    },
+    {
+      "name": "The Guardian Middle East",
+      "tier": "B",
+      "language": "en",
+      "country": "UK",
+      "feed": "https://www.theguardian.com/world/middleeast/rss",
+      "funding": "Guardian Media Group trust",
+      "bias_note": "",
+      "fast": true
+    },
+    {
+      "name": "Anadolu Agency",
+      "tier": "B",
+      "language": "en",
+      "country": "TR",
+      "feed": "https://www.aa.com.tr/en/rss/default?cat=world",
+      "state_funded": true,
+      "funding": "Turkish state-linked",
+      "bias_note": "State-linked: label honestly",
+      "fast": true
+    },
+    {
+      "name": "The New Arab",
+      "tier": "B",
+      "language": "en",
+      "country": "UK",
+      "feed": "https://www.newarab.com/rss",
+      "funding": "Fadaat Media",
+      "bias_note": "Qatar-linked ownership reported; label as appropriate",
+      "fast": true
+    },
+    {
+      "name": "+972 Magazine",
+      "tier": "B",
+      "language": "en",
+      "country": "IL",
+      "feed": "https://www.972mag.com/feed/",
+      "funding": "Independent / grants",
+      "bias_note": "Israeli-Palestinian left outlet"
+    },
+    {
+      "name": "Mondoweiss",
+      "tier": "B",
+      "language": "en",
+      "country": "US",
+      "feed": "https://mondoweiss.net/feed/",
+      "funding": "Donations",
+      "bias_note": "Advocacy-leaning"
+    },
+    {
+      "name": "Dawn",
+      "tier": "B",
+      "language": "en",
+      "country": "PK",
+      "feed": "https://www.dawn.com/feeds/home",
+      "funding": "Dawn Media Group",
+      "bias_note": "",
+      "fast": true
+    },
+    {
+      "name": "Arab News",
+      "tier": "B",
+      "language": "en",
+      "country": "SA",
+      "feed": "https://www.arabnews.com/rss.xml",
+      "state_funded": true,
+      "funding": "Saudi-linked",
+      "bias_note": "State-linked: label honestly",
+      "fast": true
+    },
+    {
+      "name": "CPJ",
+      "tier": "A",
+      "language": "en",
+      "country": "US",
+      "feed": "https://cpj.org/feed/",
+      "funding": "Donations",
+      "bias_note": "Journalist-safety data (killed, jailed)"
+    },
+    {
+      "name": "BBC News World",
+      "tier": "B",
+      "language": "en",
+      "country": "UK",
+      "feed": "https://feeds.bbci.co.uk/news/world/rss.xml",
+      "funding": "Licence fee",
+      "fast": true
+    },
+    {
+      "name": "The Guardian World",
+      "tier": "B",
+      "language": "en",
+      "country": "UK",
+      "feed": "https://www.theguardian.com/world/rss",
+      "funding": "Reader funded",
+      "fast": true
+    },
+    {
+      "name": "CAIR (press releases)",
+      "tier": "C",
+      "language": "en",
+      "country": "US",
+      "feed": "https://www.cair.com/feed/",
+      "funding": "Donations",
+      "bias_note": "Advocacy group: label as 'reported by CAIR' until police or courts confirm"
+    },
+    {
+      "name": "Tell MAMA",
+      "tier": "C",
+      "language": "en",
+      "country": "UK",
+      "feed": "https://tellmamauk.org/feed/",
+      "funding": "UK government and donations",
+      "bias_note": "Monitors anti-Muslim incidents; label as 'reported by Tell MAMA'"
+    },
+    {
+      "name": "Google News: Islamophobia",
+      "tier": "B",
+      "language": "en",
+      "feed": "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q=islamophobia+OR+%22anti-Muslim%22+OR+%22anti-Muslim+hate%22+when:1d",
+      "fast": true,
+      "aggregator": true,
+      "bias_note": "News search feed: each item is tiered by its real publisher (config trusted_publishers); unknown publishers are ignored"
+    },
+    {
+      "name": "Google News: mosque attacks",
+      "tier": "B",
+      "language": "en",
+      "feed": "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q=mosque+(attack+OR+arson+OR+vandalised+OR+shooting+OR+threat)+when:1d",
+      "fast": true,
+      "aggregator": true,
+      "bias_note": "News search feed: each item is tiered by its real publisher (config trusted_publishers); unknown publishers are ignored"
+    },
+    {
+      "name": "Google News: hijab and bans",
+      "tier": "B",
+      "language": "en",
+      "feed": "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q=(hijab+OR+niqab+OR+burqa)+ban+OR+%22Muslim+ban%22+when:1d",
+      "fast": true,
+      "aggregator": true,
+      "bias_note": "News search feed: each item is tiered by its real publisher (config trusted_publishers); unknown publishers are ignored"
+    },
+    {
+      "name": "Google News: Quran desecration",
+      "tier": "B",
+      "language": "en",
+      "feed": "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q=Quran+(burned+OR+burning+OR+desecration)+when:1d",
+      "fast": true,
+      "aggregator": true,
+      "bias_note": "News search feed: each item is tiered by its real publisher (config trusted_publishers); unknown publishers are ignored"
+    }
   ],
   "factcheck_feeds": [
-    {"name": "Alt News", "feed": "https://www.altnews.in/feed/"},
-    {"name": "BOOM", "feed": "https://www.boomlive.in/feed"},
-    {"name": "AFP Fact Check", "feed": ""},
-    {"name": "Snopes", "feed": "https://www.snopes.com/feed/"}
+    {
+      "name": "Alt News",
+      "feed": "https://www.altnews.in/feed/"
+    },
+    {
+      "name": "BOOM",
+      "feed": "https://www.boomlive.in/feed"
+    },
+    {
+      "name": "AFP Fact Check",
+      "feed": ""
+    },
+    {
+      "name": "Snopes",
+      "feed": "https://www.snopes.com/feed/"
+    }
   ],
   "creators": []
 }

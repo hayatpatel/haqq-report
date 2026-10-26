@@ -24,7 +24,7 @@ def run(store, cfg: dict) -> dict:
     now = datetime.now(timezone.utc)
     cutoff = (now - timedelta(hours=ret.get("hours", 72))).isoformat()
     logs_cutoff = (now - timedelta(days=ret.get("run_logs_days", 7))).isoformat()
-    out = {"articles": 0, "drafts": 0, "posts": 0, "run_logs": 0}
+    out = {"articles": 0, "drafts": 0, "posts": 0, "run_logs": 0, "settings": 0}
     if store is None:
         return out
 
@@ -39,5 +39,10 @@ def run(store, cfg: dict) -> dict:
     if old_articles:
         out["articles"] = store.delete("articles", {"id": _in(old_articles)})
     out["run_logs"] = store.delete("run_logs", {"started_at": f"lt.{logs_cutoff}"})
+    # small key-value records: celebrity day locks (3 days) and engagement stats (60 days)
+    day = (now - timedelta(days=3)).strftime("%Y-%m-%d")
+    stat_day = (now - timedelta(days=ret.get("stats_days", 60))).strftime("%Y%m%d")
+    out["settings"] = store.delete("settings", {"and": f"(key.like.celeb:*,key.lt.celeb:{day})"}) + \
+        store.delete("settings", {"and": f"(key.like.stat:*,key.lt.stat:{stat_day})"})
     log.info("cleanup removed %s", out)
     return out

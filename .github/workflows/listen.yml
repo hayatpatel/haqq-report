@@ -1,6 +1,7 @@
-name: listen (Telegram commands)
+name: listen (Telegram commands and fast track)
 
-# Stays connected to Telegram so your commands (/fbtoken, /tokenstatus) are answered within seconds.
+# Stays connected to Telegram so your commands (/fbtoken, /tokenstatus, /pause, /status, /celeb) are answered within seconds,
+# and runs the FAST TRACK every 5 minutes: critical news and celebrity events are checked, ranked and posted in near real time.
 # A new listener starts every 3 hours and replaces the old one, so a skipped GitHub schedule never leaves a gap.
 # The full pipeline (ingest.yml) runs separately every 4 hours.
 # Does nothing until the repository variable BOT_ENABLED is set to "true".
@@ -42,6 +43,8 @@ jobs:
           IG_TOKEN: ${{ secrets.IG_TOKEN }}
           TH_USER_ID: ${{ secrets.TH_USER_ID }}
           TH_TOKEN: ${{ secrets.TH_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python -m newsbot listen --minutes 230
 
       - name: Upload run log

@@ -9,7 +9,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
-from . import ai, cleanup, duplicates, ingest, owner_feed, pipeline, scoring, sources
+from . import ai, cleanup, duplicates, ingest, islamophobia, owner_feed, pipeline, scoring, severity, sources
+from . import celebrity as celeb_mod
 from .config import load_config
 from .models import Article, Draft, Lane
 
@@ -47,6 +48,45 @@ def mark_processed(store, article_id: int | None) -> None:
         log.warning("could not mark article processed (%s): run db/migrations/003_articles_processed.sql", type(exc).__name__)
 
 
+def claim_article(store, article_id: int | None) -> bool:
+    """Atomically take an article so the fast track and the 4-hour run can never both process it."""
+    if store is None or article_id is None:
+        return True
+    try:
+        return store.claim_flag("articles", article_id, "processed", False, True)
+    except AttributeError:
+        return True
+    except Exception as exc:  # noqa: BLE001 - e.g. the `processed` column is missing: behave as before
+        log.warning("article claim unavailable (%s)", type(exc).__name__)
+        return True
+
+
+def release_article(store, article_id: int | None) -> None:
+    if store is None or article_id is None:
+        return
+    try:
+        store.update("articles", {"id": article_id}, {"processed": False})
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def is_paused(store) -> bool:
+    """Owner kill switch (/pause in Telegram). Stored in settings.paused."""
+    try:
+        return store is not None and store.get_setting("paused", "false").strip().lower() == "true"
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def fast_posted_today(store) -> int:
+    start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    try:
+        return len(store.select_raw("drafts", {"select": "id", "status": "eq.posted", "created_at": f"gte.{start}",
+                                               "flags": "cs.{cat:breaking}"}))
+    except Exception:  # noqa: BLE001
+        return 0
+
+
 def save_article(store, a: Article) -> int | None:
     if store is None:
         return None
@@ -71,14 +111,14 @@ def save_draft(store, article_id: int | None, outcome: pipeline.Outcome) -> int 
                                     "status": c.status, "verified_by": c.verified_by})
         row = store.insert("drafts", {"article_id": article_id, "lane": d.lane.value, "status": "pending",
                                 "headline": d.headline, "body": d.body, "sources": d.source_urls,
-                                "label": d.label, "flags": d.flags})
+                                "label": d.label, "flags": d.packed_flags()})
         return row.get("id")
     except Exception as exc:  # noqa: BLE001
         log.warning("draft/claims not saved (%s)", type(exc).__name__)
         return None
 
 
-def publish_ready(store, draft_id, draft, cfg: dict, stats: dict, final: bool = False) -> None:
+def publish_ready(store, draft_id, draft, cfg: dict, stats: dict, final: bool = False, fast: bool = False) -> None:
     """Auto mode: post a Green/Amber draft live, record it, respect the daily cap. Needs the database."""
     from . import approvals
 
@@ -87,10 +127,14 @@ def publish_ready(store, draft_id, draft, cfg: dict, stats: dict, final: bool = 
         owner_feed.error("auto-post", "draft not posted: it could not be saved, so the daily cap cannot be checked", cfg)
         return
     try:
-        if approvals._posted_today(store) >= cfg["limits"]["MAX_POSTS_PER_DAY"]:
+        if is_paused(store):
+            stats["paused"] = stats.get("paused", 0) + 1  # /pause in Telegram: the draft waits, nothing is lost
+            return
+        extra = cfg.get("fast_track", {}).get("extra_daily_posts", 0) if fast else 0
+        if approvals._posted_today(store) >= cfg["limits"]["MAX_POSTS_PER_DAY"] + extra:
             stats["over_daily_limit"] = stats.get("over_daily_limit", 0) + 1
             return
-        if stats.get("published", 0) >= cfg.get("run", {}).get("max_posts_per_run", 99):
+        if not fast and stats.get("published", 0) >= cfg.get("run", {}).get("max_posts_per_run", 99):
             stats["queued"] = stats.get("queued", 0) + 1  # stays pending; posted by a later run, within 48h
             return
         now = datetime.now(timezone.utc).isoformat()
@@ -121,8 +165,7 @@ def retry_unposted(store, cfg: dict, stats: dict, limit: int = 3) -> None:
         for row in rows:
             if store.select_raw("posts", {"draft_id": f"eq.{row['id']}", "select": "id"}):
                 continue
-            draft = Draft(headline=row["headline"], body=row["body"], lane=Lane(row["lane"]),
-                          source_urls=row.get("sources") or [], label=row.get("label") or "", flags=row.get("flags") or [])
+            draft = Draft.from_row(row)
             publish_ready(store, row["id"], draft, cfg, stats, final=True)
             stats["retried"] = stats.get("retried", 0) + 1
     except Exception as exc:  # noqa: BLE001
@@ -134,29 +177,116 @@ def on_mission(a: Article, cfg: dict) -> bool:
     return scoring.has_watch_topic(text, cfg) or any(k in text for k in cfg.get("mission_keywords", []))
 
 
+def pillar(a: Article, cfg: dict) -> str:
+    text = f"{a.title} {a.summary}".lower()
+    if islamophobia.is_islamophobia(text):
+        return "islamophobia"
+    if any(k in text for k in ("palestin", "gaza", "west bank", "jerusalem", "hamas", "unrwa")):
+        return "palestine"
+    return ""
+
+
 def select_for_run(fresh: list[Article], cfg: dict) -> list[Article]:
-    """Choose what to draft: mission topics first (best tier, newest), few per source, a small off-mission quota."""
+    """Choose what to draft: reserved slots for Palestine and Islamophobia first, then mission topics by severity,
+    tier and recency, few per source, and a small off-mission quota."""
     limits = cfg.get("run", {})
     cap, per_source = limits.get("max_articles", 8), limits.get("max_per_source", 3)
     off_max = limits.get("off_mission_max", 2)
     epoch = datetime.min.replace(tzinfo=timezone.utc)
 
     def order(a: Article):
-        return (-a.tier.rank, -(a.published or epoch).timestamp())
+        return (-severity.severity(f"{a.title} {a.summary}")[0], -a.tier.rank, -(a.published or epoch).timestamp())
 
-    on = sorted((a for a in fresh if on_mission(a, cfg)), key=order)
-    off = sorted((a for a in fresh if not on_mission(a, cfg)), key=order)
+    on = sorted((a for a in fresh if on_mission(a, cfg) or islamophobia.is_islamophobia(f"{a.title} {a.summary}")), key=order)
+    off = sorted((a for a in fresh if a not in on), key=order)
+    reserved = []
+    for name, key in (("palestine", "palestine_min_per_run"), ("islamophobia", "islamophobia_min_per_run")):
+        reserved += [a for a in on if pillar(a, cfg) == name][: cfg.get("pillars", {}).get(key, 1)]
     picked, counts = [], {}
-    for a in on + off[:off_max]:
+    for a in reserved + [a for a in on if a not in reserved] + off[:off_max]:
         if len(picked) >= cap:
             break
-        if counts.get(a.source_name, 0) >= per_source:
+        if a in picked or counts.get(a.source_name, 0) >= per_source:
             continue
         counts[a.source_name] = counts.get(a.source_name, 0) + 1
         picked.append(a)
     log.info("selected %d of %d new: %d on-mission, %d off-mission", len(picked), len(fresh),
-             sum(on_mission(a, cfg) for a in picked), sum(not on_mission(a, cfg) for a in picked))
+             sum(a in on for a in picked), sum(a not in on for a in picked))
     return picked
+
+
+def handle_article(store, article: Article, ids: dict, ai_call, cfg: dict, stats: dict, recent: list[str],
+                   watch: list[dict], pool: list[Article], *, fast: bool = False, level: int = 0) -> bool:
+    """Everything that happens to ONE story: claim, celebrity rules, draft, duplicate check, save, post.
+    Used by the 4-hour run and by the fast track. Returns False when the AI is unavailable (caller stops)."""
+    article_id = ids.get(article.url)
+    if not claim_article(store, article_id):
+        stats["already_taken"] = stats.get("already_taken", 0) + 1
+        return True
+
+    category, tags, flags, extra, name, kind = None, [], [], "", None, ""
+    if cfg.get("celebrity", {}).get("enabled") and watch:
+        name = celeb_mod.match(article, watch)
+    if name:
+        lvl = celeb_mod.event_level(f"{article.title} {article.summary}")
+        if lvl < 2:
+            stats["celebrity_skipped"] = stats.get("celebrity_skipped", 0) + 1
+            return True
+        kind = celeb_mod.lock(store, name, lvl, cfg)
+        if kind is None:
+            stats["celebrity_repeat"] = stats.get("celebrity_repeat", 0) + 1  # already covered today
+            return True
+        others = [o for o in pool if o is not article and celeb_mod.match(o, watch) == name]
+        for o in others:
+            claim_article(store, ids.get(o.url))  # their info goes into THIS post; they must not post again
+        earlier = celeb_mod.earlier_headline(store, name, cfg) if kind == "update" else ""
+        article = celeb_mod.combine(article, others, name, kind, earlier)
+        category, tags, extra = "celebrity", [celeb_mod.hashtag(name)], celeb_mod.RULES
+        flags = ["update"] if kind == "update" else []
+    elif fast and level >= 3:
+        category = "breaking"
+
+    def give_back():
+        if name:
+            celeb_mod.release(store, name, kind, cfg)
+
+    try:
+        outcome = pipeline.process_article(article, ai_call, cfg, category=category, extra_rules=extra,
+                                           tags=tags, flags=flags)
+    except ai.AIUnavailable as exc:
+        stats["ai_error"] = str(exc)[:200]
+        log.error("AI unavailable, stopping drafting: %s", stats["ai_error"])
+        release_article(store, article_id)
+        give_back()
+        return False
+    except Exception as exc:  # noqa: BLE001 - one bad article must not stop the run
+        log.exception("article failed: %s (%s)", article.url, type(exc).__name__)
+        give_back()
+        return True
+    log.info("%s -> %s %s", article.url, outcome.action, outcome.reason)
+    mark_processed(store, article_id)
+    if outcome.draft is not None:
+        twin = duplicates.find_duplicate(outcome.draft.headline, recent)
+        if twin:
+            stats["duplicate"] = stats.get("duplicate", 0) + 1
+            log.info("duplicate story skipped: %r is like %r", outcome.draft.headline[:70], twin[:70])
+            give_back()
+            return True
+        recent.append(outcome.draft.headline)
+    stats[outcome.action] = stats.get(outcome.action, 0) + 1
+    if outcome.draft is None:
+        give_back()
+        return True
+    draft_id = save_draft(store, article_id, outcome)
+    if name:
+        celeb_mod.remember(store, name, outcome.draft.headline, cfg)
+    if outcome.action == "needs_approval" and stats.get("previews_sent", 0) < cfg.get("run", {}).get("max_telegram_drafts", 5):
+        d = outcome.draft
+        owner_feed.draft_preview(d.headline, d.body, d.lane.value, outcome.reason, d.source_urls, draft_id)
+        stats["previews_sent"] = stats.get("previews_sent", 0) + 1
+    elif outcome.action == "ready":
+        publish_ready(store, draft_id, outcome.draft, cfg, stats, fast=fast)
+    return True
 
 
 def fetch_all(priority: bool) -> list[Article]:
@@ -190,6 +320,12 @@ def run(priority: bool = False, *, store=None, ai_call: Callable[[str], str] | N
         stats["cleaned"] = sum(cleanup.run(store, cfg).values())
     except Exception as exc:  # noqa: BLE001 - housekeeping must never stop a run
         log.warning("cleanup skipped (%s)", type(exc).__name__)
+    try:
+        from . import insights
+        stats["insights"] = insights.collect(store, cfg)["read"]
+        insights.weekly_report(store, cfg)
+    except Exception as exc:  # noqa: BLE001 - measuring reach must never stop posting
+        log.warning("insights skipped (%s)", type(exc).__name__)
     retry_unposted(store, cfg, stats)
     recent = duplicates.recent_headlines(store, cfg.get("retention", {}).get("hours", 72))
 
@@ -199,34 +335,8 @@ def run(priority: bool = False, *, store=None, ai_call: Callable[[str], str] | N
         if ids[article.url]:
             stats["stored"] += 1
 
+    watch = celeb_mod.watchlist(cfg, store)
     for article in select_for_run(fresh, cfg):
-        try:
-            outcome = pipeline.process_article(article, ai_call, cfg)
-        except ai.AIUnavailable as exc:
-            stats["ai_error"] = str(exc)[:200]
-            log.error("AI unavailable, stopping drafting: %s", stats["ai_error"])
+        if not handle_article(store, article, ids, ai_call, cfg, stats, recent, watch, fresh):
             break
-        except Exception as exc:  # noqa: BLE001 - one bad article must not stop the run
-            log.exception("article failed: %s (%s)", article.url, type(exc).__name__)
-            mark_processed(store, ids.get(article.url))  # do not let a poison article block every future run
-            continue
-        log.info("%s -> %s %s", article.url, outcome.action, outcome.reason)
-        mark_processed(store, ids.get(article.url))
-        if outcome.draft is not None:
-            twin = duplicates.find_duplicate(outcome.draft.headline, recent)
-            if twin:
-                stats["duplicate"] = stats.get("duplicate", 0) + 1
-                log.info("duplicate story skipped: %r is like %r", outcome.draft.headline[:70], twin[:70])
-                continue
-            recent.append(outcome.draft.headline)
-        stats[outcome.action] = stats.get(outcome.action, 0) + 1
-        if outcome.draft is None:
-            continue
-        draft_id = save_draft(store, ids.get(article.url), outcome)
-        if outcome.action == "needs_approval" and stats["previews_sent"] < limits.get("max_telegram_drafts", 5):
-            d = outcome.draft
-            owner_feed.draft_preview(d.headline, d.body, d.lane.value, outcome.reason, d.source_urls, draft_id)
-            stats["previews_sent"] += 1
-        elif outcome.action == "ready":
-            publish_ready(store, draft_id, outcome.draft, cfg, stats)
     return stats

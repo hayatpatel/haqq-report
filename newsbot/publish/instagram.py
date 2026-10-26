@@ -87,3 +87,10 @@ def permalink(media_id: str) -> str:
     _, token = _creds()
     out = graph_request("GET", f"{_base()}/{media_id}", params={"fields": "permalink", "access_token": token})
     return out.get("permalink", "")
+
+
+def metrics(media_id: str) -> dict:
+    """Insights for one published post (needs the insights permission on the token)."""
+    _, token = _creds()
+    out = graph_request("GET", f"{_base()}/{media_id}/insights", params={"metric": "reach,likes,comments,saved,shares", "access_token": token})
+    return {m["name"]: (m.get("values") or [{}])[0].get("value", m.get("total_value", {}).get("value", 0)) for m in out.get("data", [])}

@@ -136,6 +136,10 @@ def classify_lane(draft: Draft, cfg: dict | None = None) -> tuple[Lane, list[str
     return Lane.GREEN, []
 
 
+GOSSIP_RE = re.compile(r"\b(dating|affair|cheat\w*|divorce\w*|split|break-?up|pregnan\w*|nude|leaked?|scandal|"
+                       r"rumou?rs?|reportedly|allegedly guilty|love life|girlfriend|boyfriend|wedding rumou?rs?)\b", re.IGNORECASE)
+
+
 def check_draft(draft: Draft, source_text: str = "", cfg: dict | None = None) -> CheckResult:
     """Run all post-draft checks. Any failure -> retry once, then skip (plan section 6)."""
     cfg = cfg or load_config()
@@ -172,8 +176,10 @@ def check_draft(draft: Draft, source_text: str = "", cfg: dict | None = None) ->
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", full):
         if CASUALTY_FIGURE_RE.search(sentence):
             # A generic verb ("said", "reported") is not enough: the SOURCE must be named in the same sentence.
+            low = sentence.lower()
             attributed = bool(NAMED_SOURCE_RE.search(sentence)) or any(
-                c.attribution and c.attribution.lower() in sentence.lower() for c in draft.claims
+                n.lower() in low for n in cfg.get("source_names", {}).values()) or any(
+                c.attribution and c.attribution.lower() in low for c in draft.claims
             )
             if not attributed:
                 failures.append(f"casualty figure without named source: {sentence.strip()[:70]}")
@@ -191,6 +197,10 @@ def check_draft(draft: Draft, source_text: str = "", cfg: dict | None = None) ->
         ok, unmatched = numbers_match(source_text, full)
         if not ok:
             failures.append("numbers not found in source: " + ", ".join(sorted(unmatched)))
+
+    # 7b. Public figures: no gossip, rumours or private-life speculation.
+    if draft.category == "celebrity" and GOSSIP_RE.search(full):
+        failures.append("celebrity post contains gossip or rumour wording")
 
     # 8. Tone: at most 2 emoji.
     emoji = re.findall(r"[\U0001F300-\U0001FAFF☀-➿]", full)

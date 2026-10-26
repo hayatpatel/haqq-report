@@ -195,7 +195,10 @@
     "islamophobia": "#Islamophobia",
     "pakistan": "#Pakistan",
     "iran": "#Iran",
-    "iraq": "#Iraq"
+    "iraq": "#Iraq",
+    "hijab": "#Hijab",
+    "mosque": "#Mosque",
+    "muslim": "#Muslims"
   },
   "source_names": {
     "news.un.org": "UN News",
@@ -225,5 +228,181 @@
   "ingest": {
     "keep_undated": false
   },
-  "red_needs_approval": false
+  "red_needs_approval": false,
+  "fast_track": {
+    "enabled": true,
+    "interval_seconds": 300,
+    "min_severity": 2,
+    "max_age_minutes": 180,
+    "max_per_cycle": 2,
+    "max_per_day": 6,
+    "extra_daily_posts": 4,
+    "note": "Runs inside the always-on listener. One trusted Tier A/B source is enough (no cross-check). Severity 3 = critical (shown as BREAKING), 2 = high. Fast posts may exceed MAX_POSTS_PER_DAY by extra_daily_posts and ignore max_posts_per_run."
+  },
+  "celebrity": {
+    "enabled": true,
+    "poll_minutes": 30,
+    "max_updates_per_day": 1,
+    "timezone": "Asia/Kolkata",
+    "max_age_hours": 24,
+    "note": "One post per celebrity per day (IST). A second UPDATE post only for critical news. Public-interest events from trusted outlets only: no gossip, relationships, health rumours. Edit with /celeb in Telegram.",
+    "names": [
+      {
+        "name": "Mohamed Salah",
+        "aliases": [
+          "Mo Salah",
+          "Salah"
+        ]
+      },
+      {
+        "name": "Karim Benzema",
+        "aliases": [
+          "Benzema"
+        ]
+      },
+      {
+        "name": "Paul Pogba",
+        "aliases": [
+          "Pogba"
+        ]
+      },
+      {
+        "name": "Achraf Hakimi",
+        "aliases": [
+          "Hakimi"
+        ]
+      },
+      {
+        "name": "Hakim Ziyech",
+        "aliases": [
+          "Ziyech"
+        ]
+      },
+      {
+        "name": "Sadio Mané",
+        "aliases": [
+          "Sadio Mane",
+          "Mané"
+        ]
+      },
+      {
+        "name": "Mo Farah",
+        "aliases": [
+          "Mohamed Farah"
+        ]
+      },
+      {
+        "name": "Khabib Nurmagomedov",
+        "aliases": [
+          "Khabib"
+        ]
+      },
+      {
+        "name": "Ibtihaj Muhammad"
+      },
+      {
+        "name": "Malala Yousafzai",
+        "aliases": [
+          "Malala"
+        ]
+      },
+      {
+        "name": "Riz Ahmed"
+      },
+      {
+        "name": "Hasan Minhaj"
+      },
+      {
+        "name": "Mahershala Ali"
+      },
+      {
+        "name": "Zayn Malik",
+        "aliases": [
+          "Zayn"
+        ]
+      },
+      {
+        "name": "Yusuf Islam",
+        "aliases": [
+          "Cat Stevens"
+        ]
+      },
+      {
+        "name": "Maher Zain"
+      },
+      {
+        "name": "Sami Yusuf"
+      },
+      {
+        "name": "Mohamed Ramadan"
+      },
+      {
+        "name": "Shah Rukh Khan"
+      },
+      {
+        "name": "Bella Hadid"
+      }
+    ]
+  },
+  "pillars": {
+    "palestine_min_per_run": 1,
+    "islamophobia_min_per_run": 1
+  },
+  "insights": {
+    "enabled": true,
+    "collect_min_hours": 3,
+    "weekly_report_weekday": 0,
+    "weekly_report_hour_ist": 9,
+    "retention_days": 60
+  },
+  "trusted_publishers": {
+    "Reuters": "B",
+    "Associated Press": "B",
+    "AP News": "B",
+    "BBC": "B",
+    "BBC News": "B",
+    "BBC Sport": "B",
+    "The Guardian": "B",
+    "Al Jazeera": "B",
+    "Al Jazeera English": "B",
+    "Middle East Eye": "B",
+    "The New Arab": "B",
+    "Anadolu Agency": "B",
+    "Anadolu Ajansı": "B",
+    "Arab News": "B",
+    "Dawn": "B",
+    "France 24": "B",
+    "DW": "B",
+    "Sky News": "B",
+    "NPR": "B",
+    "CNN": "B",
+    "The New York Times": "B",
+    "The Washington Post": "B",
+    "The Independent": "B",
+    "The Times": "B",
+    "Financial Times": "B",
+    "Euronews": "B",
+    "Al-Monitor": "B",
+    "The Times of Israel": "B",
+    "Haaretz": "B",
+    "+972 Magazine": "B",
+    "ESPN": "B",
+    "Sky Sports": "B",
+    "The Athletic": "B",
+    "Goal.com": "B",
+    "Variety": "B",
+    "The Hollywood Reporter": "B",
+    "Deadline": "B",
+    "Billboard": "B",
+    "Rolling Stone": "B",
+    "United Nations": "A",
+    "UN News": "A",
+    "OCHA": "A",
+    "UNRWA": "A",
+    "WHO": "A",
+    "UNICEF": "A"
+  },
+  "caption_tags": {
+    "breaking": "#Breaking"
+  }
 }

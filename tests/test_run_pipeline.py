@@ -40,7 +40,7 @@ def outcome(url, action="needs_approval"):
 def test_run_stores_everything_and_previews_but_never_publishes(monkeypatch):
     previews = []
     monkeypatch.setattr(owner_feed, "draft_preview", lambda *a, **k: previews.append(a))
-    monkeypatch.setattr(pipeline, "process_article", lambda a, ai_call, cfg: outcome(a.url))
+    monkeypatch.setattr(pipeline, "process_article", lambda a, ai_call, cfg, **kw: outcome(a.url))
     monkeypatch.setattr(pipeline, "publish_draft", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no publish")))
     store = FakeStore(existing=["https://e.com/1"])  # story 1 was stored by an earlier run
     stats = runner.run(store=store, ai_call=lambda p: "", cfg=CFG, fetcher=lambda priority: [art(1), art(2), art(3)])
@@ -52,13 +52,13 @@ def test_run_stores_everything_and_previews_but_never_publishes(monkeypatch):
 def test_preview_cap_respected(monkeypatch):
     sent = []
     monkeypatch.setattr(owner_feed, "draft_preview", lambda *a, **k: sent.append(1))
-    monkeypatch.setattr(pipeline, "process_article", lambda a, ai_call, cfg: outcome(a.url))
+    monkeypatch.setattr(pipeline, "process_article", lambda a, ai_call, cfg, **kw: outcome(a.url))
     runner.run(store=FakeStore(), ai_call=lambda p: "", cfg=CFG, fetcher=lambda p: [art(i) for i in range(5)])
     assert len(sent) == 2  # max_telegram_drafts
 
 
 def test_ai_outage_stops_drafting_but_keeps_stored_articles(monkeypatch):
-    def boom(a, ai_call, cfg):
+    def boom(a, ai_call, cfg, **kw):
         raise ai.AIUnavailable("all providers failed")
     monkeypatch.setattr(pipeline, "process_article", boom)
     store = FakeStore()
@@ -68,7 +68,7 @@ def test_ai_outage_stops_drafting_but_keeps_stored_articles(monkeypatch):
 
 def test_run_works_without_database(monkeypatch):
     monkeypatch.setattr(owner_feed, "draft_preview", lambda *a, **k: None)
-    monkeypatch.setattr(pipeline, "process_article", lambda a, ai_call, cfg: outcome(a.url))
+    monkeypatch.setattr(pipeline, "process_article", lambda a, ai_call, cfg, **kw: outcome(a.url))
     stats = runner.run(store=None, ai_call=lambda p: "", cfg=CFG, fetcher=lambda p: [art(1)])
     assert stats["new"] == 1 and stats["stored"] == 0 and stats["previews_sent"] == 1
 
@@ -126,7 +126,7 @@ def test_cli_run_command(monkeypatch):
 
 def test_processed_articles_are_marked_and_unprocessed_are_retried(monkeypatch):
     monkeypatch.setattr(owner_feed, "draft_preview", lambda *a, **k: None)
-    monkeypatch.setattr(pipeline, "process_article", lambda a, ai_call, cfg: outcome(a.url))
+    monkeypatch.setattr(pipeline, "process_article", lambda a, ai_call, cfg, **kw: outcome(a.url))
     store = FakeStore(existing=["https://e.com/1"])
     store.unprocessed = ["https://e.com/2"]  # stored during an earlier AI outage
     stats = runner.run(store=store, ai_call=lambda p: "", cfg=CFG, fetcher=lambda p: [art(1), art(2)])
@@ -135,9 +135,9 @@ def test_processed_articles_are_marked_and_unprocessed_are_retried(monkeypatch):
 
 
 def test_ai_outage_leaves_articles_unprocessed(monkeypatch):
-    def boom(a, ai_call, cfg):
+    def boom(a, ai_call, cfg, **kw):
         raise ai.AIUnavailable("down")
     monkeypatch.setattr(pipeline, "process_article", boom)
     store = FakeStore()
     runner.run(store=store, ai_call=lambda p: "", cfg=CFG, fetcher=lambda p: [art(1)])
-    assert not store.rows.get("updates")
+    assert not any(u[2] == {"processed": True} for u in store.rows.get("updates", []))  # released, not marked done

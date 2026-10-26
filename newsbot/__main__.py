@@ -189,8 +189,8 @@ def cmd_listen(args) -> int:
         totals = approvals.listen(store, args.minutes)
         for line in totals["results"]:
             logging.getLogger("haqq.cli").info("telegram: %s", line)
-        rl.summary.update({"handled": totals["handled"], "errors": totals["errors"]})
-        rl.idle = totals["handled"] == 0 and totals["errors"] == 0
+        rl.summary.update({"handled": totals["handled"], "errors": totals["errors"], "fast_posted": totals["fast_posted"]})
+        rl.idle = totals["handled"] == 0 and totals["errors"] == 0 and totals["fast_posted"] == 0
     return 0 if rl.status == "ok" else 1
 
 

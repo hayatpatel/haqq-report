@@ -42,6 +42,6 @@ def test_cleanup_deletes_in_dependency_order_and_only_news_tables():
     db = DB()
     out = cleanup.run(db, {"retention": {"hours": 72}})
     order = [t for t, _ in db.deleted]
-    assert order == ["posts", "drafts", "articles", "run_logs"]
+    assert order == ["posts", "drafts", "articles", "run_logs", "settings", "settings"]
     assert db.deleted[0][1] == {"draft_id": "in.(7,9)"} and out["articles"] == 1
-    assert cleanup.run(None, {}) == {"articles": 0, "drafts": 0, "posts": 0, "run_logs": 0}
+    assert cleanup.run(None, {}) == {"articles": 0, "drafts": 0, "posts": 0, "run_logs": 0, "settings": 0}

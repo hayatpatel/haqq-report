@@ -38,6 +38,7 @@ class Article:
     language: str = "en"
     translated: bool = False
     state_funded: bool = False
+    related_urls: list[str] = field(default_factory=list)  # other outlets covering the same item (celebrity digest)
 
     @property
     def key(self) -> str:
@@ -64,3 +65,18 @@ class Draft:
     source_urls: list[str] = field(default_factory=list)
     label: str = ""  # e.g. "On-ground report: reported by NAME, not independently confirmed yet"
     flags: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)  # hashtags that replace the automatic topic tags (e.g. a celebrity)
+
+    def packed_flags(self) -> list[str]:
+        """Flags plus category and tags, so they survive in the drafts table without new columns."""
+        extra = [f"cat:{self.category}"] + [f"tag:{t}" for t in self.tags]
+        return [f for f in self.flags if not f.startswith(("cat:", "tag:"))] + extra
+
+    @classmethod
+    def from_row(cls, row: dict) -> "Draft":
+        flags = list(row.get("flags") or [])
+        cat = next((f[4:] for f in flags if f.startswith("cat:")), "general")
+        tags = [f[4:] for f in flags if f.startswith("tag:")]
+        return cls(headline=row["headline"], body=row["body"], lane=Lane(row["lane"]), category=cat,
+                   source_urls=row.get("sources") or [], label=row.get("label") or "",
+                   flags=[f for f in flags if not f.startswith(("cat:", "tag:"))], tags=tags)

@@ -22,6 +22,8 @@ class Source:
     bias_note: str = ""
     state_funded: bool = False
     priority: bool = False  # Palestine and priority feeds polled every 15 minutes
+    fast: bool = False  # trusted enough to post alone on the fast track (one Tier A/B source is enough)
+    aggregator: bool = False  # a news search feed: the real publisher is in each item (tiered via trusted_publishers)
 
     @property
     def has_feed(self) -> bool:
@@ -36,13 +38,14 @@ def load_sources(path: Path = SEED_PATH) -> list[Source]:
             name=s["name"], tier=Tier(s["tier"]), language=s.get("language", "en"),
             country=s.get("country", ""), feed=s.get("feed", ""), funding=s.get("funding", ""),
             bias_note=s.get("bias_note", ""), state_funded=bool(s.get("state_funded", False)),
-            priority=bool(s.get("priority", False)),
+            priority=bool(s.get("priority", False)), fast=bool(s.get("fast", False)),
+            aggregator=bool(s.get("aggregator", False)),
         ))
     return out
 
 
-def feeds(only_priority: bool = False, path: Path = SEED_PATH) -> list[Source]:
-    return [s for s in load_sources(path) if s.has_feed and (s.priority or not only_priority)]
+def feeds(only_priority: bool = False, path: Path = SEED_PATH, only_fast: bool = False) -> list[Source]:
+    return [s for s in load_sources(path) if s.has_feed and (s.priority or not only_priority) and (s.fast or not only_fast)]
 
 
 def by_name(name: str, path: Path = SEED_PATH) -> Source | None:

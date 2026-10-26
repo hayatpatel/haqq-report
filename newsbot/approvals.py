@@ -6,6 +6,7 @@ draft live to every enabled platform; Reject closes it. Each draft can be acted 
 """
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -96,6 +97,42 @@ def handle(store, cb: dict, cfg: dict) -> str:
     return f"draft {raw_id} NOT posted: {errors}"
 
 
+def status_text(store) -> str:
+    from . import runner
+
+    cfg = load_config()
+    paused = runner.is_paused(store)
+    pending = len(store.select_raw("drafts", {"select": "id", "status": "eq.pending", "lane": "in.(green,amber)"}))
+    return "\n".join([
+        "⏸️ STATUS · PAUSED" if paused else "🟢 STATUS · running",
+        f"Mode: {cfg.get('mode')} · fast track: {store.get_setting('fast_track', 'on')}",
+        f"Posted today: {_posted_today(store)} of {cfg['limits']['MAX_POSTS_PER_DAY']} (fast track extra: {cfg.get('fast_track', {}).get('extra_daily_posts', 0)})",
+        f"Waiting to post: {pending}",
+        "Platforms on: " + ", ".join(k for k, v in cfg["enable"].items() if v),
+    ])
+
+
+def celeb_command(store, rest: str) -> str:
+    from . import celebrity
+
+    cfg = load_config()
+    watch = celebrity.watchlist(cfg, store)
+    action, _, name = rest.strip().partition(" ")
+    name = name.strip()
+    action = action.lower()
+    if action == "add" and name:
+        if not any(p["name"].lower() == name.lower() for p in watch):
+            watch.append({"name": name})
+        store.set_setting("celebrities", json.dumps(watch))
+        return f"✅ WATCHLIST · added {name}\nOne post per day for each person, trusted outlets only, no gossip."
+    if action == "remove" and name:
+        watch = [p for p in watch if p["name"].lower() != name.lower()]
+        store.set_setting("celebrities", json.dumps(watch))
+        return f"✅ WATCHLIST · removed {name}"
+    return "👤 CELEBRITY WATCHLIST (" + str(len(watch)) + ")\n" + ", ".join(p["name"] for p in watch) + \
+        "\n\n/celeb add NAME · /celeb remove NAME"
+
+
 def handle_message(store, msg: dict) -> str:
     """Owner commands typed to the bot: /fbtoken, /tokenstatus, /help."""
     owner = str(optional_env("TELEGRAM_OWNER_ID"))
@@ -116,8 +153,27 @@ def handle_message(store, msg: dict) -> str:
     if cmd == "/tokenstatus":
         owner_feed.message(fbtoken.status(store))
         return "tokenstatus sent"
+    if cmd in ("/pause", "/resume"):
+        store.set_setting("paused", "true" if cmd == "/pause" else "false")
+        owner_feed.message("⏸️ PAUSED · nothing will be posted until you send /resume. Drafts wait and are posted later."
+                           if cmd == "/pause" else "▶️ RESUMED · posting is on again.")
+        return cmd[1:]
+    if cmd == "/fast":
+        want = rest.strip().lower()
+        if want in ("on", "off"):
+            store.set_setting("fast_track", want)
+        owner_feed.message(f"⚡ FAST TRACK · {store.get_setting('fast_track', 'on').upper()}\nUse /fast on or /fast off.")
+        return "fast " + want
+    if cmd == "/status":
+        owner_feed.message(status_text(store))
+        return "status sent"
+    if cmd == "/celeb":
+        owner_feed.message(celeb_command(store, rest))
+        return "celeb command"
     if cmd in ("/help", "/start"):
-        owner_feed.message("Commands: /fbtoken (update the Facebook token), /tokenstatus (check it).\n\n" + fbtoken.HELP)
+        owner_feed.message("Commands:\n/status · what is running\n/pause · /resume · stop or start all posting\n"
+                           "/fast on|off · the fast track\n/celeb list|add NAME|remove NAME · the celebrity watchlist\n"
+                           "/fbtoken · /tokenstatus · the Facebook token\n\n" + fbtoken.HELP)
         return "help sent"
     return "ignored: not a command"
 
@@ -169,9 +225,23 @@ def listen(store, minutes: float, *, wait: int = 25, cfg: dict | None = None,
     sleep, clock = sleep or time.sleep, clock or time.monotonic
     cfg = cfg or load_config()
     end = clock() + minutes * 60
-    totals = {"polls": 0, "handled": 0, "errors": 0, "results": []}
+    totals = {"polls": 0, "handled": 0, "errors": 0, "results": [], "fast_posted": 0}
     first, bad_in_a_row = True, 0
+    fast_state: dict = {}
+    interval = cfg.get("fast_track", {}).get("interval_seconds", 300)
+    next_fast = clock()  # the first fast-track cycle starts right away
     while clock() < end:
+        if cfg.get("fast_track", {}).get("enabled", True) and clock() >= next_fast:
+            next_fast = clock() + interval
+            try:
+                from . import fasttrack
+                fs = fasttrack.cycle(store, cfg, state=fast_state)
+                totals["fast_posted"] += fs.get("published", 0)
+                if fs.get("fast_candidates"):
+                    log.info("fast track: %s", {k: v for k, v in fs.items() if v})
+            except Exception as exc:  # noqa: BLE001 - never let a bad cycle stop the listener
+                totals["errors"] += 1
+                log.exception("fast track cycle failed (%s)", type(exc).__name__)
         try:
             stats = poll(store, cfg, wait=wait, first=first)
             first, bad_in_a_row = False, 0
