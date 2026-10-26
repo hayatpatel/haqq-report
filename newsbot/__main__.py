@@ -131,6 +131,7 @@ def cmd_card_test(_args) -> int:
     """Render a sample card and caption, upload the card to Supabase Storage, and send both to Telegram."""
     import requests
 
+    from .runlog import RunLog
     from . import cards, template
     from .config import load_config
     from .models import Draft
