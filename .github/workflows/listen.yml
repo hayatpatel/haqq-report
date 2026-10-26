@@ -2,12 +2,13 @@ name: listen (Telegram commands and fast track)
 
 # Stays connected to Telegram so your commands (/fbtoken, /tokenstatus, /pause, /status, /celeb) are answered within seconds,
 # and runs the FAST TRACK every 5 minutes: critical news and celebrity events are checked, ranked and posted in near real time.
-# A new listener starts every 3 hours and replaces the old one, so a skipped GitHub schedule never leaves a gap.
+# GitHub often skips scheduled runs, so a new run is requested every 30 minutes. It WAITS in the queue (only one waits) and
+# starts the moment the running listener ends, so there is no gap and no listener is ever cancelled.
 # The full pipeline (ingest.yml) runs separately every 4 hours.
 # Does nothing until the repository variable BOT_ENABLED is set to "true".
 on:
   schedule:
-    - cron: "50 */3 * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -15,7 +16,7 @@ permissions:
 
 concurrency:
   group: telegram-listener
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   listen:
