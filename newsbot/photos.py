@@ -54,6 +54,19 @@ PLACES = ["Al-Aqsa Mosque", "Dome of the Rock", "Old City of Jerusalem", "Al-Shi
           "New York", "Washington", "New Delhi", "Delhi", "Mumbai", "Palestine"]
 
 
+# Places where the real picture is destruction: an undamaged skyline would mislead, so only recent photos of the
+# damage are used there, and with none found the post gets the brand card instead.
+WAR_PLACES = {"gaza", "gaza city", "gaza strip", "khan younis", "rafah", "jabalia", "deir al-balah", "al-shifa hospital",
+              "sudan", "khartoum", "omdurman", "el fasher", "darfur", "port sudan", "yemen", "sanaa", "hodeidah", "aden",
+              "syria", "aleppo", "idlib", "homs"}
+WAR_RE = re.compile(r"\b(destr\w+|rubble|ruins?|ruined|devastat\w+|collaps\w+|bombed|bombardment|shelled|damage\w*|"
+                    r"aftermath|razed|flatten\w+|wreckage|airstrike\w*|war)\b", re.IGNORECASE)
+
+
+def war_place(place: str) -> bool:
+    return place.lower() in WAR_PLACES
+
+
 @dataclass
 class Photo:
     file_url: str
@@ -86,7 +99,11 @@ def queries(headline: str, body: str, flags: list[str], category: str = "general
             break
     for place in PLACES:
         if re.search(rf"(?<!\w){re.escape(place)}(?!\w)", text, re.IGNORECASE):
-            out.append((place, place.split()[0].lower().strip("'")))
+            key = place.split()[0].lower().strip("'")
+            if war_place(place):
+                out += [(f"{place} destroyed buildings", key), (f"{place} rubble", key), (f"{place} war damage 2025", key)]
+                break
+            out.append((place, key))
             if len([o for o in out if o[0] in PLACES]) >= 2:
                 break
     if category == "islamophobia" or re.search(r"\bmosque\b", text, re.IGNORECASE):
@@ -95,7 +112,7 @@ def queries(headline: str, body: str, flags: list[str], category: str = "general
     for q in out:
         if q[0] not in seen:
             seen.add(q[0]); res.append(q)
-    return res[:3]
+    return res[:4]
 
 
 def license_ok(name: str) -> bool:
@@ -111,12 +128,18 @@ def _text(value: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", value or ""))).strip()
 
 
-def search(query: str, must: str, cfg: dict, used: set[str]) -> Photo | None:
+def photo_year(info: dict, meta: dict) -> int:
+    taken = _text((meta.get("DateTimeOriginal") or {}).get("value", ""))
+    m = re.search(r"\b(19|20)\d\d\b", taken) or re.search(r"\b(19|20)\d\d\b", info.get("timestamp", ""))
+    return int(m.group(0)) if m else 0
+
+
+def search(query: str, must: str, cfg: dict, used: set[str], war: bool = False) -> Photo | None:
     pc = cfg.get("photos", {})
     params = {"action": "query", "format": "json", "formatversion": 2, "generator": "search", "gsrnamespace": 6,
               "gsrsearch": f"{query} filetype:bitmap", "gsrlimit": 20, "prop": "imageinfo",
-              "iiprop": "url|size|mime|extmetadata", "iiurlwidth": 1600,
-              "iiextmetadatafilter": "LicenseShortName|Artist|ImageDescription|Restrictions|NonFree"}
+              "iiprop": "url|size|mime|timestamp|extmetadata", "iiurlwidth": 1600,
+              "iiextmetadatafilter": "LicenseShortName|Artist|ImageDescription|Restrictions|NonFree|DateTimeOriginal"}
     pages = requests.get(API, params=params, headers=UA, timeout=25).json().get("query", {}).get("pages", [])
     for p in sorted(pages, key=lambda x: x.get("index", 99)):
         info = (p.get("imageinfo") or [{}])[0]
@@ -133,6 +156,8 @@ def search(query: str, must: str, cfg: dict, used: set[str]) -> Photo | None:
             continue
         blob = f"{title} {desc}"
         if BAD.search(blob) or must not in blob.lower():
+            continue
+        if war and (not WAR_RE.search(blob) or photo_year(info, meta) < pc.get("war_min_year", 2024)):
             continue
         return Photo(file_url=info["thumburl"], page_url=info.get("descriptionurl", ""), title=title,
                      artist=artist[:70], license=lic, query=query)
@@ -153,7 +178,7 @@ def pick(headline: str, body: str, flags: list[str], category: str = "general", 
         pass
     try:
         for q, must in queries(headline, body, flags, category):
-            photo = search(q, must, cfg, used)
+            photo = search(q, must, cfg, used, war=war_place(q.split(' destroyed')[0].split(' rubble')[0].split(' war damage')[0]))
             if not photo:
                 continue
             resp = requests.get(photo.file_url, headers=UA, timeout=40)

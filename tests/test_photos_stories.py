@@ -90,3 +90,18 @@ def test_story_only_when_daily_cap_reached_and_not_when_paused(monkeypatch):
     seen.clear(); s.paused = True
     runner.publish_ready(s, 1, D, CFG, {})
     assert not seen
+
+
+def test_gaza_needs_recent_destruction_photos(monkeypatch):
+    def page(i, title, ts, desc=""):
+        return {"title": title, "index": i, "imageinfo": [{"thumburl": "u", "descriptionurl": "d", "width": 3000, "height": 2000, "timestamp": ts,
+                "extmetadata": {"LicenseShortName": {"value": "CC BY 4.0"}, "Artist": {"value": "A"}, "ImageDescription": {"value": desc}}}]}
+    pages = [page(1, "File:Gaza City skyline.jpg", "2025-01-01T00:00:00Z"),
+             page(2, "File:Gaza destroyed buildings 2014.jpg", "2014-08-01T00:00:00Z"),
+             page(3, "File:Gaza rubble of destroyed buildings.jpg", "2025-03-01T00:00:00Z")]
+
+    class R:
+        def json(self): return {"query": {"pages": pages}}
+    monkeypatch.setattr(photos.requests, "get", lambda *a, **k: R())
+    assert photos.search("Gaza rubble", "gaza", CFG, set(), war=True).title == "File:Gaza rubble of destroyed buildings.jpg"
+    assert photos.queries("Aid reaches Gaza City", "", [])[0][0] == "Gaza City destroyed buildings"

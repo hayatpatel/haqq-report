@@ -350,3 +350,4 @@ See [docs/status.md](docs/status.md) for plan versus build.
 - **Telegram** shows an `Image:` line per post (photo used, or why a card failed, e.g. the Supabase Storage error).
 - Run the **card-test** workflow after deploying: it sends the feed card and story card to your Telegram.
 - Stories need `instagram_business_content_publish` (Instagram) and Page `pages_manage_posts` (Facebook).
+- **War zones** (Gaza, Sudan, Yemen, Syria): only photos of destruction taken in 2024 or later (`photos.war_min_year`) are used, so a calm skyline never illustrates a story about a catastrophe. No match means the brand card, not an old photo.
