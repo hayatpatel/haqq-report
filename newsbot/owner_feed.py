@@ -67,7 +67,7 @@ def _post_link(r) -> str:
 
 
 def post_results(headline: str, results: Iterable, *, dry_run: bool, cfg: dict | None = None,
-                 lane: str = "", source: str = "", note: str = "", tag: str = "") -> None:
+                 lane: str = "", source: str = "", note: str = "", tag: str = "", notes: list | None = None) -> None:
     """One message per story: status line, headline, one line per platform, source."""
     if not _enabled("posts", cfg):
         return
@@ -103,7 +103,8 @@ def post_results(headline: str, results: Iterable, *, dry_run: bool, cfg: dict |
                 fixes.append(fix)
     if fixes:
         lines += ["", "Fix: " + " ".join(fixes)]
-    tail = ([f"Flagged: {note}"] if note and ok else []) + ([f"Source: {source}"] if source else [])
+    tail = ([f"Flagged: {note}"] if note and ok else []) + ([f"Source: {source}"] if source else []) + \
+        [f"Image: {n}" for n in (notes or [])]
     if tail:
         lines += [""] + tail
     if not dry_run and not ok and not failed:

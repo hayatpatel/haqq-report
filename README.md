@@ -336,3 +336,17 @@ Red stories are posted like the rest (`red_needs_approval: false` in `config.jso
 **Telegram commands**: `/status`, `/pause`, `/resume`, `/fast on|off`, `/celeb ...`, `/fbtoken`, `/tokenstatus`, `/help`.
 
 See [docs/status.md](docs/status.md) for plan versus build.
+
+## Photos and Stories
+
+- **Photos** (`newsbot/photos.py`): every post gets a related photo from Wikimedia Commons only. Accepted licences: public domain, CC0, CC BY.
+  Share-alike, non-commercial and no-derivatives files are rejected in code, as are files with a restriction note, files without a named
+  author, graphic or child content, and small images. The caption always says `Representative photo: <author> / Wikimedia Commons, <licence>`
+  (it shows the place, building or person, not necessarily the event). No safe photo found: a plain brand card is used.
+- **Cards** (`cards.build`): 1080x1080 feed card and 1080x1920 story card (photo darkened as background, brand + date, topic badge,
+  kicker, headline, `#HaqqReport`). Stories print the photo credit on the image.
+- **Stories**: Facebook (`photo_stories`) and Instagram (`STORIES`) for every post (`enable.facebook_story`, `enable.instagram_story`).
+  When the daily or per-run cap blocks the feed post, the story still goes out once and the draft stays queued. `/pause` stops everything.
+- **Telegram** shows an `Image:` line per post (photo used, or why a card failed, e.g. the Supabase Storage error).
+- Run the **card-test** workflow after deploying: it sends the feed card and story card to your Telegram.
+- Stories need `instagram_business_content_publish` (Instagram) and Page `pages_manage_posts` (Facebook).

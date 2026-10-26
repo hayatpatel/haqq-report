@@ -118,6 +118,38 @@ def save_draft(store, article_id: int | None, outcome: pipeline.Outcome) -> int 
         return None
 
 
+def _done_platforms(store, draft_id) -> set[str]:
+    try:
+        rows = store.select_raw("posts", {"draft_id": f"eq.{draft_id}", "select": "platform"})
+        return {r["platform"] for r in rows}
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def _record(store, draft_id, results) -> list:
+    done = [r for r in results if r.ok and not r.skipped]
+    for r in done:
+        store.insert("posts", {"draft_id": draft_id, "platform": r.platform, "platform_post_id": r.post_id})
+    return done
+
+
+def post_story_only(store, draft_id, draft, cfg: dict, stats: dict) -> None:
+    """The feed post is blocked by a cap: the story still goes out (once), and the draft stays queued."""
+    story_platforms = {p for p in ("facebook_story", "instagram_story") if cfg.get("enable", {}).get(p)}
+    done = _done_platforms(store, draft_id)
+    if not story_platforms - done:
+        return
+    try:
+        start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        today = store.select_raw("posts", {"platform": "like.*_story", "posted_at": f"gte.{start}", "select": "id"})
+        if len(today) >= cfg.get("stories", {}).get("max_per_day", 30):
+            return
+        results = pipeline.publish_draft(draft, "", dry_run=False, cfg=cfg, store=store, skip=done, story_only=True)
+        stats["story_only"] = stats.get("story_only", 0) + len(_record(store, draft_id, results))
+    except Exception as exc:  # noqa: BLE001
+        log.warning("story-only post failed (%s)", type(exc).__name__)
+
+
 def publish_ready(store, draft_id, draft, cfg: dict, stats: dict, final: bool = False, fast: bool = False) -> None:
     """Auto mode: post a Green/Amber draft live, record it, respect the daily cap. Needs the database."""
     from . import approvals
@@ -133,21 +165,22 @@ def publish_ready(store, draft_id, draft, cfg: dict, stats: dict, final: bool = 
         extra = cfg.get("fast_track", {}).get("extra_daily_posts", 0) if fast else 0
         if approvals._posted_today(store) >= cfg["limits"]["MAX_POSTS_PER_DAY"] + extra:
             stats["over_daily_limit"] = stats.get("over_daily_limit", 0) + 1
+            post_story_only(store, draft_id, draft, cfg, stats)  # no feed post today, but the story still goes out
             return
         if not fast and stats.get("published", 0) >= cfg.get("run", {}).get("max_posts_per_run", 99):
             stats["queued"] = stats.get("queued", 0) + 1  # stays pending; posted by a later run, within 48h
+            post_story_only(store, draft_id, draft, cfg, stats)
             return
         now = datetime.now(timezone.utc).isoformat()
         if not store.claim("drafts", draft_id, "pending", "approved", {"decided_at": now}):
             stats["already_claimed"] = stats.get("already_claimed", 0) + 1  # another job is posting it: never twice
             return
-        results = pipeline.publish_draft(draft, "", dry_run=False, cfg=cfg)
-        done = [r for r in results if r.ok and not r.skipped]
-        for r in done:
-            store.insert("posts", {"draft_id": draft_id, "platform": r.platform, "platform_post_id": r.post_id})
-        store.update("drafts", {"id": draft_id}, {"status": "posted" if done else ("skipped" if final else "pending")})
-        stats["published"] = stats.get("published", 0) + (1 if done else 0)
-        if not done:
+        results = pipeline.publish_draft(draft, "", dry_run=False, cfg=cfg, store=store, skip=_done_platforms(store, draft_id))
+        done = _record(store, draft_id, results)
+        feed_done = [r for r in done if not r.platform.endswith("_story")]
+        store.update("drafts", {"id": draft_id}, {"status": "posted" if feed_done else ("skipped" if final else "pending")})
+        stats["published"] = stats.get("published", 0) + (1 if feed_done else 0)
+        if not feed_done:
             stats["publish_failed"] = stats.get("publish_failed", 0) + 1
     except Exception as exc:  # noqa: BLE001 - never lose the rest of the run
         log.exception("auto-post failed (%s)", type(exc).__name__)
@@ -163,7 +196,7 @@ def retry_unposted(store, cfg: dict, stats: dict, limit: int = 3) -> None:
         rows = store.select_raw("drafts", {"status": "eq.pending", "lane": "in.(green,amber)",
                                            "created_at": f"gte.{since}", "order": "created_at.asc", "limit": str(limit)})
         for row in rows:
-            if store.select_raw("posts", {"draft_id": f"eq.{row['id']}", "select": "id"}):
+            if store.select_raw("posts", {"draft_id": f"eq.{row['id']}", "platform": "not.like.*_story", "select": "id"}):
                 continue
             draft = Draft.from_row(row)
             publish_ready(store, row["id"], draft, cfg, stats, final=True)

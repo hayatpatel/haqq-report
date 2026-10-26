@@ -1,4 +1,6 @@
 {
+  "photos": {"enabled": true, "min_width": 1200, "min_height": 800},
+  "stories": {"max_per_day": 30},
   "brand": {
     "card_name": "HAQQ REPORT",
     "hashtag": "#HaqqReport",
@@ -25,6 +27,8 @@
   "enable": {
     "facebook": true,
     "instagram": true,
+    "facebook_story": true,
+    "instagram_story": true,
     "threads": true,
     "bluesky": false,
     "telegram_channel": false,

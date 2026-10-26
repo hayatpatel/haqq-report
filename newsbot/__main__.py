@@ -147,18 +147,29 @@ def cmd_card_test(_args) -> int:
             text = template.build_caption(draft, platform, cfg=cfg)
             limit = cfg["caption_limits"][platform]
             logging.getLogger("haqq.cli").info("%s caption (%d/%d chars):\n%s", platform, len(text), limit, text)
-        url = cards.publish_url(draft, cfg)
-        if not url:
-            rl.fail("card could not be uploaded to Supabase Storage (see the log above)")
+        draft.headline = "Aid trucks reach Gaza City for the first time in weeks, UN says"
+        media = cards.build(draft, cfg, _store_or_none())
+        log = logging.getLogger("haqq.cli")
+        for n in media.notes:
+            log.info("image: %s", n)
+        draft.photo_credit = media.credit
+        if not media.feed_url:
+            rl.fail("card could not be uploaded to Supabase Storage: " + "; ".join(media.notes))
             return 1
-        head = requests.get(url, timeout=30)
-        logging.getLogger("haqq.cli").info("public card URL: %s -> HTTP %s", url, head.status_code)
-        if head.status_code != 200:
-            rl.fail(f"card URL is not public (HTTP {head.status_code}): run db/migrations/004_cards_bucket.sql")
-            return 1
-        requests.post(_api("sendPhoto"), data={"chat_id": optional_env("TELEGRAM_OWNER_ID"),
-                      "caption": template.build_caption(draft, "threads", cfg=cfg)[:1000]},
-                      files={"photo": ("card.jpg", head.content)}, timeout=60)
+        sent = 0
+        for label, url in (("feed card", media.feed_url), ("story card", media.story_url)):
+            if not url:
+                continue
+            head = requests.get(url, timeout=30)
+            log.info("%s public URL: %s -> HTTP %s", label, url, head.status_code)
+            if head.status_code != 200:
+                rl.fail(f"{label} URL is not public (HTTP {head.status_code}): run db/migrations/004_cards_bucket.sql")
+                return 1
+            requests.post(_api("sendPhoto"), data={"chat_id": optional_env("TELEGRAM_OWNER_ID"),
+                          "caption": (label + "\n\n" + template.build_caption(draft, "threads", cfg=cfg))[:1000]},
+                          files={"photo": (label + ".jpg", head.content)}, timeout=60)
+            sent += 1
+        log.info("card test sent %d image(s) to Telegram", sent)
     return 0 if rl.status == "ok" else 1
 
 

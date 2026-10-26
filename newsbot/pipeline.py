@@ -121,8 +121,12 @@ def build_caption(draft: Draft, platform: str, page_url: str = "", cfg: dict | N
 
 
 def publish_draft(draft: Draft, image_url: str = "", *, dry_run: bool = True,
-                  alert: Callable[[str], None] | None = None, cfg: dict | None = None) -> list[PublishResult]:
-    """Publish to every enabled platform, each in isolation."""
+                  alert: Callable[[str], None] | None = None, cfg: dict | None = None, store=None,
+                  skip: set[str] | frozenset = frozenset(), story_only: bool = False) -> list[PublishResult]:
+    """Publish to every enabled platform, each in isolation. Also posts the Facebook and Instagram stories.
+
+    skip: platforms already done for this draft (never post twice). story_only: the feed post is blocked (daily cap),
+    so only the stories go out."""
     cfg = cfg or load_config()
     results: list[PublishResult] = []
 
@@ -137,8 +141,12 @@ def publish_draft(draft: Draft, image_url: str = "", *, dry_run: bool = True,
             if res.ok:
                 page_url = cfg["site"].get("base_url", "").rstrip("/") + res.post_id
 
-    if not dry_run and not image_url and any(platform_enabled(p, cfg) for p in ("facebook", "instagram", "threads")):
-        image_url = cards.publish_url(draft, cfg)
+    media = cards.Media(feed_url=image_url)
+    if not dry_run and not image_url and any(platform_enabled(p, cfg) for p in
+                                             ("facebook", "instagram", "threads", "facebook_story", "instagram_story")):
+        media = cards.build(draft, cfg, store)
+        image_url = media.feed_url
+        draft.photo_credit = media.credit if image_url else ""  # credit only when the photo is really in the post
 
     def fb() -> str:
         caption = build_caption(draft, "facebook", cfg=cfg)
@@ -165,8 +173,17 @@ def publish_draft(draft: Draft, image_url: str = "", *, dry_run: bool = True,
             build_caption(draft, "telegram_channel", page_url, cfg), image_url or None),
     }
 
+    jobs["facebook_story"] = lambda: meta_fb.post_story(media.story_url)
+    jobs["instagram_story"] = lambda: instagram.publish_story(media.story_url)
+
     for platform, job in jobs.items():
-        if not platform_enabled(platform, cfg):
+        if not platform_enabled(platform, cfg) or platform in skip:
+            continue
+        is_story = platform.endswith("_story")
+        if story_only and not is_story:
+            continue
+        if is_story and not dry_run and not media.story_url:
+            results.append(PublishResult(platform, ok=False, skipped=True, error="story image not available"))
             continue
         if platform == "instagram" and not image_url:
             results.append(PublishResult(platform, ok=False, skipped=True, error="instagram needs an image"))
@@ -184,5 +201,6 @@ def publish_draft(draft: Draft, image_url: str = "", *, dry_run: bool = True,
         results.append(res)
     owner_feed.post_results(draft.headline, results, dry_run=dry_run, cfg=cfg, lane=draft.lane.value, note=", ".join(f for f in draft.flags if f not in ("update",)),
                             tag=("FAST TRACK" if draft.category in ("breaking", "celebrity") else draft.category.upper() if draft.category != "general" else ""),
-                            source=template.source_name(draft.source_urls[0], cfg) if draft.source_urls else "")
+                            source=template.source_name(draft.source_urls[0], cfg) if draft.source_urls else "",
+                            notes=media.notes)
     return results

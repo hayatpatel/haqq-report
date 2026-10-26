@@ -17,3 +17,7 @@ Reference: [project-plan.md](project-plan.md), [meta-setup.md](meta-setup.md), [
 | Telegram `/pause /resume /status` | `approvals.py` | Built. `/approve /reject /correct /source /creator /watch /brief` not built |
 | Creator vetting, Myth vs Fact, Daily Palestine Brief, Weekly Ledger, translation, Bluesky, website, WhatsApp | | Not built yet |
 | Cloudflare Worker webhook | `worker/` | Replaced by the always-on listener (`listen.yml`) |
+
+## Oct 2026: photos and stories
+Built: licensed Commons photos with printed/caption credit, photo-background feed and story cards, Facebook and Instagram stories for every post
+(story-only when capped), image diagnostics in Telegram. Not yet verified live: Commons search (sandbox cannot reach it) and Supabase Storage upload.

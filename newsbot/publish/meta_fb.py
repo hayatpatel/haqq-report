@@ -40,6 +40,16 @@ def post_multi_photo(image_urls: list[str], message: str) -> str:
     return out["id"]
 
 
+def post_story(image_url: str) -> str:
+    """Facebook Page story: upload the image unpublished, then publish it as a photo story."""
+    page_id, token = _creds()
+    photo = graph_request("POST", f"{_base()}/{page_id}/photos",
+                          data={"url": image_url, "published": "false", "access_token": token})
+    out = graph_request("POST", f"{_base()}/{page_id}/photo_stories",
+                        data={"photo_id": photo["id"], "access_token": token})
+    return str(out.get("post_id") or out.get("id") or photo["id"])
+
+
 def post_text(message: str) -> str:
     page_id, token = _creds()
     out = graph_request("POST", f"{_base()}/{page_id}/feed", data={"message": message, "access_token": token})

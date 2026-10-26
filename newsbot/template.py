@@ -87,6 +87,8 @@ def build_caption(draft: Draft, platform: str, page_url: str = "", cfg: dict | N
     source_lines = [f"Source: {name}"] if name else []
     if url and platform in LINK_IN_CAPTION:
         source_lines.append(url)
+    if draft.photo_credit:
+        source_lines.append(draft.photo_credit)
     foot = "\n\n".join(p for p in ["\n".join(source_lines), " ".join(dict.fromkeys(tags))] if p)
 
     head = kicker(draft) + fit(draft.headline, max(40, limit // 4))

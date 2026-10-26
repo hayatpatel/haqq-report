@@ -66,6 +66,7 @@ class Draft:
     label: str = ""  # e.g. "On-ground report: reported by NAME, not independently confirmed yet"
     flags: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)  # hashtags that replace the automatic topic tags (e.g. a celebrity)
+    photo_credit: str = ""  # set at publish time when a licensed photo is used; written into every caption
 
     def packed_flags(self) -> list[str]:
         """Flags plus category and tags, so they survive in the drafts table without new columns."""
