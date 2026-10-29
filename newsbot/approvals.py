@@ -10,7 +10,7 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 
-from . import fbtoken, owner_feed, pipeline
+from . import fbtoken, owner_feed, pipeline, socialtoken
 from .config import load_config, optional_env
 from .models import Draft, Lane
 from .publish.telegram_channel import _call
@@ -150,8 +150,19 @@ def handle_message(store, msg: dict) -> str:
                 reply += "\nI could not delete your message. Please delete it yourself."
         owner_feed.message(reply)
         return "fbtoken: " + reply.splitlines()[0]
+    if cmd in ("/igtoken", "/thtoken"):
+        kind = "instagram" if cmd == "/igtoken" else "threads"
+        reply = socialtoken.update_from_text(kind, rest, store)
+        if rest.strip() and rest.strip().lower() != "reset":  # the message holds a secret: remove it
+            try:
+                _call("deleteMessage", {"chat_id": msg["chat"]["id"], "message_id": msg["message_id"]})
+            except Exception:  # noqa: BLE001
+                reply += "\nI could not delete your message. Please delete it yourself."
+        owner_feed.message(reply)
+        return f"{cmd[1:]}: " + reply.splitlines()[0]
     if cmd == "/tokenstatus":
-        owner_feed.message(fbtoken.status(store))
+        socialtoken.apply_overrides(store)
+        owner_feed.message(fbtoken.status(store) + "\n\n" + socialtoken.status())
         return "tokenstatus sent"
     if cmd in ("/pause", "/resume"):
         store.set_setting("paused", "true" if cmd == "/pause" else "false")
@@ -173,7 +184,7 @@ def handle_message(store, msg: dict) -> str:
     if cmd in ("/help", "/start"):
         owner_feed.message("Commands:\n/status · what is running\n/pause · /resume · stop or start all posting\n"
                            "/fast on|off · the fast track\n/celeb list|add NAME|remove NAME · the celebrity watchlist\n"
-                           "/fbtoken · /tokenstatus · the Facebook token\n\n" + fbtoken.HELP)
+                           "/fbtoken · /igtoken · /thtoken · /tokenstatus · the Facebook, Instagram and Threads tokens\n\n" + fbtoken.HELP)
         return "help sent"
     return "ignored: not a command"
 

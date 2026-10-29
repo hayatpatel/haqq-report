@@ -26,12 +26,12 @@ def wait_until_ready(container_id: str, token: str, *, tries: int = 12, delay: f
                      sleep: Callable[[float], None] = time.sleep) -> None:
     """Poll status_code until FINISHED (avoids 'container not ready')."""
     for _ in range(tries):
-        out = graph_request("GET", f"{_base()}/{container_id}", params={"fields": "status_code", "access_token": token})
+        out = graph_request("GET", f"{_base()}/{container_id}", params={"fields": "status_code,status", "access_token": token})
         status = out.get("status_code")
         if status == "FINISHED":
             return
         if status in ("ERROR", "EXPIRED"):
-            raise PublishError(f"instagram container {container_id} status {status}")
+            raise PublishError(f"instagram container {container_id} status {status}: {out.get('status', 'no detail')}")
         sleep(delay)
     raise PublishError(f"instagram container {container_id} not ready in time")
 

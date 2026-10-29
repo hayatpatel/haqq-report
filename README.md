@@ -359,3 +359,6 @@ See [docs/status.md](docs/status.md) for plan versus build.
 - **Instagram**: first line is a hook (under about 120 characters, the part visible before "more"), short lines, 5 hashtags, a soft "save" line, no links; 4:5 image; story for every post.
 - **Threads**: short and conversational, one topic tag (Threads uses a single tag as a topic), real outlet link when short.
 Settings: `platform_style` in `config.json`. Every caption is fitted to its limit with the source and photo credit kept (the Threads "caption too long" error came from a long Google News link plus the credit line). For Google News items the real outlet name is shown, not news.google.com.
+
+## Instagram and Threads tokens from Telegram
+`/tokenstatus` now asks Facebook, Instagram and Threads whether each token works right now and prints the exact error. `/igtoken <token>` and `/thtoken <token>` check and save a new token (short-lived tokens are exchanged for 60-day ones when `IG_APP_SECRET` / `TH_APP_SECRET` are set), delete your message, and apply from the next run; `reset` goes back to the GitHub secret. A platform paused after 3 failures now shows its last real error and tries again after 30 minutes (`limits.PLATFORM_PAUSE_MINUTES`), even inside the long-running listener.

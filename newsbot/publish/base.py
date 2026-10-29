@@ -95,7 +95,11 @@ def run_platform(platform: str, fn: Callable[[], str], *, store: JsonStateStore 
     state = store.get(platform)
 
     if state.get("paused"):
-        return PublishResult(platform, ok=False, skipped=True, error="platform paused")
+        waited = time.time() - float(state.get("paused_at", 0))
+        if waited < cfg["limits"].get("PLATFORM_PAUSE_MINUTES", 30) * 60:
+            return PublishResult(platform, ok=False, skipped=True,
+                                 error="platform paused. Last error: " + str(state.get("last_error", "unknown"))[:300])
+        state = {"failures": 0, "paused": False}  # pause over: try again (a long-running listener must not stay paused for hours)
 
     last_error = ""
     for attempt in range(retries + 1):
@@ -111,7 +115,7 @@ def run_platform(platform: str, fn: Callable[[], str], *, store: JsonStateStore 
 
     failures = int(state.get("failures", 0)) + 1
     paused = failures >= limit
-    store.set(platform, {"failures": failures, "paused": paused})
+    store.set(platform, {"failures": failures, "paused": paused, "last_error": last_error[:400], "paused_at": time.time()})
     if alert:
         msg = f"[{platform}] publish failed ({failures}/{limit}): {last_error}"
         if paused:

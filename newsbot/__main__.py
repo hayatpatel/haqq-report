@@ -87,6 +87,8 @@ def _store_or_none():
         from .store import Store
         store = Store()
         fbtoken.apply_overrides(store)  # a token sent via Telegram overrides the GitHub secret
+        from . import socialtoken
+        socialtoken.apply_overrides(store)
         return store
     except Exception:  # noqa: BLE001
         return None

@@ -52,6 +52,9 @@ _FIXES = [
 
 def friendly_error(raw: str) -> tuple[str, str]:
     """(what happened in plain words, what to do). Falls back to the raw text, shortened."""
+    if raw.startswith("platform paused. Last error:"):
+        what, fix = friendly_error(raw.split("Last error:", 1)[1].strip())
+        return "Paused after repeated failures. Last error: " + what, fix
     for needles, what, fix in _FIXES:
         if any(n in raw for n in needles):
             return what, fix
