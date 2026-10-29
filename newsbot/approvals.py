@@ -160,6 +160,9 @@ def handle_message(store, msg: dict) -> str:
                 reply += "\nI could not delete your message. Please delete it yourself."
         owner_feed.message(reply)
         return f"{cmd[1:]}: " + reply.splitlines()[0]
+    if cmd == "/igsetup":
+        owner_feed.message(socialtoken.setup_page_route(rest, store))
+        return "igsetup"
     if cmd == "/tokenstatus":
         socialtoken.apply_overrides(store)
         owner_feed.message(fbtoken.status(store) + "\n\n" + socialtoken.status())
@@ -184,7 +187,7 @@ def handle_message(store, msg: dict) -> str:
     if cmd in ("/help", "/start"):
         owner_feed.message("Commands:\n/status · what is running\n/pause · /resume · stop or start all posting\n"
                            "/fast on|off · the fast track\n/celeb list|add NAME|remove NAME · the celebrity watchlist\n"
-                           "/fbtoken · /igtoken · /thtoken · /tokenstatus · the Facebook, Instagram and Threads tokens\n\n" + fbtoken.HELP)
+                           "/fbtoken · /igtoken · /thtoken · /igsetup · /tokenstatus · the Facebook, Instagram and Threads tokens\n\n" + fbtoken.HELP)
         return "help sent"
     return "ignored: not a command"
 

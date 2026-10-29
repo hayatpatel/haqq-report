@@ -362,3 +362,5 @@ Settings: `platform_style` in `config.json`. Every caption is fitted to its limi
 
 ## Instagram and Threads tokens from Telegram
 `/tokenstatus` now asks Facebook, Instagram and Threads whether each token works right now and prints the exact error. `/igtoken <token>` and `/thtoken <token>` check and save a new token (short-lived tokens are exchanged for 60-day ones when `IG_APP_SECRET` / `TH_APP_SECRET` are set), delete your message, and apply from the next run; `reset` goes back to the GitHub secret. A platform paused after 3 failures now shows its last real error and tries again after 30 minutes (`limits.PLATFORM_PAUSE_MINUTES`), even inside the long-running listener.
+
+**Never-expiring Instagram:** `/igsetup` switches Instagram posting to the Facebook Page token (which never expires; the Instagram account must be Professional and linked to the Page, and the token needs `instagram_basic` and `instagram_content_publish`). `/igsetup login` goes back. While on the login token, the bot refreshes the Instagram and Threads tokens every 20 days by itself and saves the new one in Supabase.

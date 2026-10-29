@@ -351,6 +351,11 @@ def run(priority: bool = False, *, store=None, ai_call: Callable[[str], str] | N
 
     try:
         stats["cleaned"] = sum(cleanup.run(store, cfg).values())
+        from . import socialtoken
+        for line in socialtoken.refresh_due(store):
+            log.info(line)
+            if "failed" in line or "error" in line:
+                owner_feed.error("token refresh", line, cfg)
     except Exception as exc:  # noqa: BLE001 - housekeeping must never stop a run
         log.warning("cleanup skipped (%s)", type(exc).__name__)
     try:

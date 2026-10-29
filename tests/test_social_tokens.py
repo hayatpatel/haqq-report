@@ -31,3 +31,26 @@ def test_token_check_reports_exact_error(monkeypatch):
     monkeypatch.setattr(socialtoken.requests, "get", lambda *a, **k: R())
     out = socialtoken.check("instagram")
     assert "Session has expired" in out and "SECRETTOKEN" not in out and "/igtoken" in out
+
+
+def test_instagram_page_route_switches_endpoint_and_token(monkeypatch):
+    from newsbot.publish import instagram
+    monkeypatch.setenv("IG_USER_ID", "1"); monkeypatch.setenv("IG_TOKEN", "login-token")
+    monkeypatch.setenv("FB_PAGE_TOKEN", "page-token"); monkeypatch.setenv("IG_BUSINESS_ID", "999")
+    monkeypatch.delenv("IG_ROUTE", raising=False)
+    assert instagram._creds() == ("1", "login-token") and "graph.instagram.com" in instagram._base()
+    monkeypatch.setenv("IG_ROUTE", "page")
+    assert instagram._creds() == ("999", "page-token") and "graph.facebook.com" in instagram._base()
+
+
+def test_refresh_due_saves_new_token_and_waits_20_days(monkeypatch):
+    store = type("S", (), {"d": {}, "get_setting": lambda s, k, d=None: s.d.get(k, d),
+                           "set_setting": lambda s, k, v: s.d.__setitem__(k, v),
+                           "upsert": lambda s, t, row, c: s.d.__setitem__(row["key"], row["value"])})()
+    monkeypatch.setenv("IG_TOKEN", "old"); monkeypatch.delenv("TH_TOKEN", raising=False)
+    class R:
+        status_code = 200; text = ""
+        def json(self): return {"access_token": "new"}
+    monkeypatch.setattr(socialtoken.requests, "get", lambda *a, **k: R())
+    assert socialtoken.refresh_due(store) == ["instagram token refreshed"] and store.d["IG_TOKEN"] == "new"
+    assert socialtoken.refresh_due(store) == []  # refreshed today: nothing to do

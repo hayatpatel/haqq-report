@@ -29,13 +29,14 @@ KINDS = {
 def apply_overrides(store) -> None:
     if store is None:
         return
-    for k in KINDS.values():
+    for key in [k["setting"] for k in KINDS.values()] + ["IG_ROUTE", "IG_BUSINESS_ID"]:
         try:
-            rows = store.select_raw("settings", {"key": f"eq.{k['setting']}"})
+            rows = store.select_raw("settings", {"key": f"eq.{key}"})
             if rows and rows[0].get("value"):
-                os.environ[k["setting"]] = rows[0]["value"]
+                os.environ[key] = rows[0]["value"]
         except Exception:  # noqa: BLE001
             pass
+    return
 
 
 def _me(kind: str, token: str) -> dict:
@@ -66,7 +67,9 @@ def check(kind: str) -> str:
 
 
 def status() -> str:
-    return "\n".join(check(k) for k in KINDS)
+    route = ("Instagram posts through the Facebook Page token (never expires)." if optional_env("IG_ROUTE") == "page"
+             else "Instagram posts with the Instagram login token (60 days, auto-refreshed every 20 days).")
+    return route + "\n" + "\n".join(check(k) for k in KINDS)
 
 
 def update_from_text(kind: str, raw: str, store) -> str:
@@ -96,3 +99,74 @@ def update_from_text(kind: str, raw: str, store) -> str:
         return f"❌ {name} TOKEN · not saved\nWhy: {redact(text)[:220]}\nFix: generate a new token and send it again."
     store.upsert("settings", {"key": k["setting"], "value": token}, "key")
     return f"✅ {name} TOKEN · saved\nAccount: @{data.get('username', '?')}. It is used from the next run."
+
+
+# ---- never-expiring route: Instagram through the Facebook Page token ---------------------------------------
+GRAPH = "https://graph.facebook.com/v21.0"
+NEED = ["instagram_basic", "instagram_content_publish"]
+
+
+def setup_page_route(arg: str, store) -> str:
+    """/igsetup  : switch Instagram to the Facebook Page token (never expires). /igsetup login : back to the 60-day token."""
+    from .publish import meta_fb
+
+    if arg.strip().lower() in ("login", "reset", "off"):
+        store.upsert("settings", {"key": "IG_ROUTE", "value": "login"}, "key")
+        os.environ["IG_ROUTE"] = "login"
+        return "✅ INSTAGRAM · back on the Instagram login token (60 days, auto-refreshed)."
+    token, page_id = optional_env("FB_PAGE_TOKEN"), optional_env("FB_PAGE_ID")
+    if not (token and page_id):
+        return "❌ INSTAGRAM SETUP · FB_PAGE_TOKEN or FB_PAGE_ID is missing in this workflow."
+    try:
+        scopes = set(meta_fb.debug_token(token).get("scopes", []))
+        missing = [p for p in NEED if p not in scopes]
+        if missing:
+            return ("❌ INSTAGRAM SETUP · the Facebook token lacks: " + ", ".join(missing) + ".\n"
+                    "Fix: Graph API Explorer, User Token, add instagram_basic, instagram_content_publish, pages_show_list, "
+                    "pages_read_engagement, pages_manage_posts, pages_manage_engagement, Generate, then send /fbtoken <token>, then /igsetup.")
+        r = requests.get(f"{GRAPH}/{page_id}", params={"fields": "instagram_business_account{id,username}", "access_token": token}, timeout=30)
+        data = r.json()
+        if r.status_code >= 400 or "error" in data:
+            return "❌ INSTAGRAM SETUP · " + redact(str(data.get("error", data)).replace(token, "***"))[:220]
+        acct = data.get("instagram_business_account")
+        if not acct:
+            return ("❌ INSTAGRAM SETUP · this Facebook Page has no Instagram account linked.\n"
+                    "Fix: Instagram app, Settings, Account type must be Professional (Business or Creator); then Facebook Page, "
+                    "Settings, Linked accounts, Instagram, Connect. Then send /igsetup again.")
+    except Exception as exc:  # noqa: BLE001
+        return "❌ INSTAGRAM SETUP · " + redact(str(exc).replace(token, "***"))[:220]
+    store.upsert("settings", {"key": "IG_BUSINESS_ID", "value": str(acct["id"])}, "key")
+    store.upsert("settings", {"key": "IG_ROUTE", "value": "page"}, "key")
+    os.environ["IG_BUSINESS_ID"], os.environ["IG_ROUTE"] = str(acct["id"]), "page"
+    return (f"✅ INSTAGRAM · now posts through the Facebook Page token, which never expires.\n"
+            f"Account: @{acct.get('username', '?')}. Used from the next run. Go back any time with /igsetup login.")
+
+
+def refresh_due(store, days: int = 20) -> list[str]:
+    """Refresh the Instagram and Threads tokens before their 60 days end, saving the new one in Supabase. Never raises."""
+    from datetime import datetime, timezone
+
+    out = []
+    now = datetime.now(timezone.utc)
+    for kind, k in KINDS.items():
+        token = optional_env(k["setting"])
+        if not token or store is None:
+            continue
+        try:
+            stamp = store.get_setting(k["setting"] + "_refreshed", "")
+            if stamp and (now - datetime.fromisoformat(stamp)).days < days:
+                continue
+            grant = "ig_refresh_token" if kind == "instagram" else "th_refresh_token"
+            host = "graph.instagram.com" if kind == "instagram" else "graph.threads.net"
+            r = requests.get(f"https://{host}/refresh_access_token", params={"grant_type": grant, "access_token": token}, timeout=30)
+            new = r.json().get("access_token") if r.status_code < 400 else None
+            if new:
+                store.upsert("settings", {"key": k["setting"], "value": new}, "key")
+                os.environ[k["setting"]] = new
+                store.set_setting(k["setting"] + "_refreshed", now.isoformat())
+                out.append(f"{kind} token refreshed")
+            else:
+                out.append(f"{kind} token refresh failed: {redact(r.text)[:120]}")
+        except Exception as exc:  # noqa: BLE001
+            out.append(f"{kind} token refresh error: {type(exc).__name__}")
+    return out

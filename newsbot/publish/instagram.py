@@ -9,15 +9,23 @@ from __future__ import annotations
 import time
 from typing import Callable
 
-from ..config import load_config, require_env
+from ..config import load_config, optional_env, require_env
 from .base import PublishError, graph_request
 
 
+def page_route() -> bool:
+    """True when posting goes through the Facebook Page token (never expires) instead of the 60-day Instagram token."""
+    return optional_env("IG_ROUTE") == "page" and bool(optional_env("IG_BUSINESS_ID") and optional_env("FB_PAGE_TOKEN"))
+
+
 def _base() -> str:
-    return f"https://graph.instagram.com/{load_config()['meta']['graph_version']}"
+    host = "graph.facebook.com" if page_route() else "graph.instagram.com"
+    return f"https://{host}/{load_config()['meta']['graph_version']}"
 
 
 def _creds() -> tuple[str, str]:
+    if page_route():
+        return optional_env("IG_BUSINESS_ID"), optional_env("FB_PAGE_TOKEN")
     env = require_env("IG_USER_ID", "IG_TOKEN")
     return env["IG_USER_ID"], env["IG_TOKEN"]
 
