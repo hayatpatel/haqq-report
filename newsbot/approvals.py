@@ -231,6 +231,33 @@ def poll(store, cfg: dict | None = None, wait: int = 0, first: bool = True) -> d
     return stats
 
 
+def catch_up(store, cfg: dict, now=None, dispatch=None) -> bool:
+    """GitHub often skips scheduled runs. When the full pipeline has not run for catchup_hours, start it from here.
+    True when a run was requested. Never raises."""
+    import os
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    try:
+        now = now or datetime.now(timezone.utc)
+        hours = cfg.get("run", {}).get("catchup_hours", 4.7)
+        rows = store.select_raw("run_logs", {"name": "like.run*", "select": "started_at", "order": "started_at.desc", "limit": "1"})
+        last = datetime.fromisoformat(rows[0]["started_at"].replace("Z", "+00:00")) if rows else None
+        if last and now - last < timedelta(hours=hours):
+            return False
+        asked = store.get_setting("catchup_at", "")
+        if asked and now - datetime.fromisoformat(asked) < timedelta(minutes=45):
+            return False  # already requested; the run is queued or starting
+        store.set_setting("catchup_at", now.isoformat())
+        (dispatch or (lambda: subprocess.run(["gh", "workflow", "run", "ingest.yml"], check=True, timeout=60,
+                                             env={**os.environ, "GH_TOKEN": os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN", "")})))()
+        log.info("full pipeline was overdue: requested a run")
+        return True
+    except Exception as exc:  # noqa: BLE001
+        log.warning("catch-up check failed (%s)", type(exc).__name__)
+        return False
+
+
 def listen(store, minutes: float, *, wait: int = 25, cfg: dict | None = None,
            sleep=None, clock=None) -> dict:
     """Stay on Telegram for `minutes`, answering commands within seconds. Survives temporary errors."""
@@ -244,7 +271,11 @@ def listen(store, minutes: float, *, wait: int = 25, cfg: dict | None = None,
     fast_state: dict = {}
     interval = cfg.get("fast_track", {}).get("interval_seconds", 300)
     next_fast = clock()  # the first fast-track cycle starts right away
+    next_catch = clock() + 120
     while clock() < end:
+        if clock() >= next_catch:
+            next_catch = clock() + 600
+            catch_up(store, cfg)
         if cfg.get("fast_track", {}).get("enabled", True) and clock() >= next_fast:
             next_fast = clock() + interval
             try:

@@ -54,3 +54,22 @@ def test_refresh_due_saves_new_token_and_waits_20_days(monkeypatch):
     monkeypatch.setattr(socialtoken.requests, "get", lambda *a, **k: R())
     assert socialtoken.refresh_due(store) == ["instagram token refreshed"] and store.d["IG_TOKEN"] == "new"
     assert socialtoken.refresh_due(store) == []  # refreshed today: nothing to do
+
+
+def test_catch_up_starts_overdue_pipeline_once():
+    from datetime import datetime, timedelta, timezone
+    from newsbot import approvals
+    now = datetime(2026, 10, 30, 12, 0, tzinfo=timezone.utc)
+    class S:
+        d = {}
+        def __init__(self, last): self.last = last
+        def select_raw(self, t, p): return [{"started_at": self.last.isoformat()}]
+        def get_setting(self, k, d=None): return self.d.get(k, d)
+        def set_setting(self, k, v): self.d[k] = v
+    calls = []
+    fresh = S(now - timedelta(hours=2))
+    assert approvals.catch_up(fresh, {}, now, lambda: calls.append(1)) is False
+    late = S(now - timedelta(hours=9))
+    assert approvals.catch_up(late, {}, now, lambda: calls.append(1)) is True
+    assert approvals.catch_up(late, {}, now + timedelta(minutes=10), lambda: calls.append(1)) is False  # already requested
+    assert len(calls) == 1
