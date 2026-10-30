@@ -10,19 +10,16 @@ This README is the single source of truth for the project. Longer background liv
 
 ---
 
-## Editorial standards (these are enforced in code, not just written down)
+## Editorial standards (enforced in code where possible)
 
 1. **Truth beats speed.** One false viral post destroys years of trust.
-2. **Named attribution on every claim.** "The Gaza Health Ministry said", "UN OCHA reported",
-   "journalist X on the ground reported". No casualty figure without its named source.
+2. **Named attribution on every claim.** "The Gaza Health Ministry said", "UN OCHA reported". A casualty figure without its named source fails the safety check.
 3. **Zero hate.** Criticise governments, armies and policies. Never attack a people or a religion.
-4. **Humans approve the risky stuff.** Child victims, graphic content, genocide or war-crime wording,
-   unverified viral clips, sectarian topics, designated groups and calls to action never auto-post.
-5. **The AI never gives religious rulings.** Verified Quran translations and graded hadith only. No
-   fatwas, tafsir or its own interpretation.
-6. **The desk never says "genocide", "ethnic cleansing" or "war crime" in its own voice.** It quotes the
-   named body that said so (ICJ, UN commissions, Amnesty, HRW, B'Tselem and others).
+4. **Risky content is flagged.** Child victims, graphic content, genocide or war-crime wording, unverified viral clips, sectarian topics, designated groups and calls to action are classed **Red**. With the current setting (`red_needs_approval: false`) Red posts go out like the rest, with "Flagged: ..." in your Telegram message so you can review and delete them first. Set `red_needs_approval` back to `true` to make Red wait for you.
+5. **The AI never gives religious rulings.** No fatwas, tafsir or its own interpretation.
+6. **The desk never says "genocide", "ethnic cleansing" or "war crime" in its own voice.** It quotes the named body that said so (ICJ, UN commissions, Amnesty, HRW, B'Tselem and others).
 7. **Public corrections log** for every update or retraction.
+8. **Images are honest.** Licensed photos only (credited), recent photos for war zones, and anything AI-made is labelled "AI-generated illustration" on the image and in the caption.
 
 ## Source tiers
 
@@ -43,334 +40,234 @@ with no original link. Rules live in [`newsbot/verify.py`](newsbot/verify.py).
 
 | Lane | Examples | Rule |
 |---|---|---|
-| Green | Occasions, Myth vs Fact with a fact-check source, UN data, positive stories | Auto post (after review period) |
-| Amber | Casualty updates, hate-crime reports, court rulings, politics | Two sources or Tier A, extra checks, attribution, no photos of people |
-| Red | Child victims, graphic content, genocide wording, detainees/hostages, unverified viral video, sectarian topics, designated groups, calls to action, Kashmir/Xinjiang political claims | Never auto-posts. Telegram approve/reject with draft and sources |
+| Green | Occasions, Myth vs Fact with a fact-check source, UN data, positive stories | Posts automatically |
+| Amber | Casualty updates, hate-crime reports, court rulings, politics | Two sources or Tier A, extra checks, attribution |
+| Red | Child victims, graphic content, genocide wording, detainees/hostages, unverified viral video, sectarian topics, designated groups, calls to action, Kashmir/Xinjiang political claims | Flagged in Telegram. Waits for approval only if `red_needs_approval` is `true` |
 
-Dignity rules: no images of bodies, no identifiable children, victims named only when family or officials
-released the name, content warnings where distressing. Classification and post-draft checks are in
-[`newsbot/safety.py`](newsbot/safety.py).
+Dignity rules: no images of bodies, no identifiable children, victims named only when family or officials released the name. Classification and post-draft checks are in [`newsbot/safety.py`](newsbot/safety.py).
 
-## Pipeline
+## How it works
 
 ```
-collect feeds + creators -> ingest, dedupe, 48h cap, translate -> extract claims + tag tier
-  -> score (significance, impact, interest, gap bonus, watch-topic bonus)
-  -> verified enough? (no: hold in watch list)
-  -> classify Green / Amber / Red (Red: Telegram approval)
-  -> draft with attribution -> checks pass? (retry once, then skip)
-  -> visual card (no graphic images) -> publish to each enabled platform + website
-  -> monitor comments and corrections
+sources (feeds, Google News searches, creators) -> ingest, dedupe, 48h window
+  -> claims + tier -> verify (one Tier A/B source is enough) -> score
+  -> draft with named attribution -> safety checks (retry once, else skip) -> duplicate check
+  -> per-platform wording (variants.py) -> photo or AI illustration -> feed card + story card
+  -> publish: Facebook, Instagram, Threads (+ Facebook and Instagram stories)
+  -> private Telegram message with links, errors and the image outcome
 ```
 
-Platforms: Facebook Page, Instagram, Threads (all via one Meta app, each with its own credentials,
-token and code path), plus Telegram channel, Bluesky and the website. Meta over-restricts Palestine
-content, so no single platform is critical.
+Two paths feed the same code (`runner.handle_article`):
 
-## Status
+- **Full run** (`ingest.yml`, every 4 hours, started by the listener if GitHub skips it): picks up to `run.max_articles` stories, reserves one slot each for Palestine and Islamophobia (`pillars`), posts at most `run.max_posts_per_run` (2) per run, up to `limits.MAX_POSTS_PER_DAY` (10) a day.
+- **Fast track** (inside the always-on listener, every 5 minutes): critical news (severity 2 to 3) and celebrity events are posted ahead of the queue. See below.
 
-This repository is the **project scaffold**. Honest status of each part:
+Platforms: Facebook Page, Instagram, Threads, each with its own credentials and code path, so one failing never stops the others. Telegram channel, Bluesky and the website exist in code but are switched off in `config.json`.
+
+## Current status
+
+Live in `auto` mode on Facebook, Instagram and Threads, with Facebook and Instagram stories. Details of what was planned versus built: [`docs/status.md`](docs/status.md) and [`docs/project-plan.md`](docs/project-plan.md).
 
 | Area | State |
 |---|---|
-| Config, safety lanes, verification tiers, scoring, claims, fact-check rules | Built and unit-tested |
-| Meta publishers (Facebook, Instagram, Threads) with isolation, retry, auto-pause | Built, unit-tested with mocks. **Not yet exercised against the live Meta API** |
-| Token health job (Facebook `debug_token`, Instagram/Threads age and refresh) | Built. Needs Supabase `tokens` rows and `GH_PAT_SECRETS` |
-| Telegram channel, Bluesky, website generator, corrections log | Built, minimal |
-| Telegram control bot (Cloudflare Worker) | Written, **not deployed** |
-| Supabase schema | Written, **not applied** |
-| Visual cards (`cards.py`), photos, weekly report, Palestine daily brief, creator vetting | Not built yet |
-| GitHub Actions schedules | Present but **off** until `BOT_ENABLED=true` |
-
-Everything ships **disabled and in review mode**: all platform flags in `config.json` are `false`, and
-`mode` is `review` (every draft needs approval for the first 4 weeks).
+| Pipeline, safety lanes, verification, scoring, drafting (Groq then Gemini) | Live |
+| Facebook, Instagram, Threads posting; stories on Facebook and Instagram | Live |
+| Fast track, celebrity once-a-day rule, Islamophobia pillar | Live |
+| Photos (Wikimedia Commons), photo cards, AI illustration fallback | Live |
+| Per-platform wording, daily digest, weekly reach report | Live (weekly report needs a week of data) |
+| Telegram control: listener, `/pause`, `/fbtoken`, `/igtoken`, `/igsetup` and more | Live |
+| Telegram approval buttons, Cloudflare Worker (`worker/`) | Not used (`approvals.buttons: false`) |
+| Telegram channel, Bluesky, website | Built, switched off |
 
 ## Repository layout
 
 ```
 newsbot/
-  config.py          config.json + environment secrets, redaction
-  models.py          Article, Claim, Draft, Tier, Lane
-  sources.py         source registry and tiers        (data/sources.seed.json)
-  ingest.py          fetch, dedupe, 48h window
-  claims.py          claim extraction + anti-hallucination trace check
-  verify.py          tier and verification rules
-  safety.py          lanes, language policy, number checks
-  scoring.py         story scoring
-  pipeline.py        orchestration (dry-run by default)
-  factcheck.py       Myth vs Fact rules
-  calendar_islam.py  occasions via AlAdhan, election-silence reminders
-  corrections.py     public corrections log
-  health.py          daily token health job
-  ai.py              Groq -> Gemini failover
-  store.py           Supabase client
-  publish/
-    base.py          retry, isolation, auto-pause, secret-safe errors
-    meta_fb.py       Facebook Page      (FB_PAGE_ID, FB_PAGE_TOKEN)
-    instagram.py     Instagram          (IG_USER_ID, IG_TOKEN)
-    threads.py       Threads            (TH_USER_ID, TH_TOKEN)
-    tokens.py        expiry check and refresh for IG and Threads
-    bluesky.py  telegram_channel.py  site.py
-worker/              Cloudflare Worker for the Telegram webhook
-db/schema.sql        Supabase tables (RLS on, no public policies)
-site/                static website output (generated)
-data/                source registry seed
-docs/                meta-setup.md, project-plan.md
-scripts/             set_github_secrets.sh, import_credentials.py, resolve_ids.py
-tests/               pytest suite
-.github/workflows/   tests, ingest, breaking, calendar, health, keepalive
-config.json          non-secret settings (modes, limits, watch topics, schedule)
+  runner.py        full run, auto-posting, caps, retries, story-only path, catch-up of missed platforms
+  pipeline.py      claims, verify, draft, checks, publish_draft (per-platform posts, stories, cooldown)
+  fasttrack.py severity.py celebrity.py islamophobia.py   fast track, celebrity and Islamophobia rules
+  variants.py      per-platform wording with code checks
+  template.py      caption template, hashtags, length fitting
+  photos.py ai_art.py cards.py   licensed photos, AI illustration fallback, feed and story cards
+  duplicates.py cleanup.py       duplicate guard, 72h retention
+  insights.py digest.py          engagement reads, weekly report, daily digest
+  approvals.py     Telegram listener and commands, catch-up of skipped runs
+  fbtoken.py socialtoken.py      Facebook, Instagram and Threads token tools
+  ratelimit.py     cooldown after Meta throttling
+  owner_feed.py runlog.py        Telegram messages and run logs
+  config.py models.py sources.py ingest.py claims.py verify.py safety.py scoring.py
+  factcheck.py calendar_islam.py corrections.py health.py ai.py store.py
+  publish/         base.py (retry, isolation, pause), meta_fb.py, instagram.py, threads.py, tokens.py,
+                   bluesky.py, telegram_channel.py, site.py
+db/                schema.sql, grant_service_role.sql, migrations/ (002 to 005)
+data/              sources.seed.json (the source registry)
+docs/              meta-setup.md, project-plan.md, status.md
+scripts/           set_github_secrets.sh, import_credentials.py, resolve_ids.py
+tests/             pytest suite
+.github/workflows/ see "GitHub Actions"
+config.json        every non-secret setting (see "Configuration")
 ```
 
-## Quick start
+## Quick start (local)
 
 ```bash
 git clone https://github.com/hayatpatel/haqq-report && cd haqq-report
 pip install -r requirements-dev.txt
 pytest                              # run the test suite
 cp .env.example .env                # fill in locally; .env is gitignored, never commit it
-python -m newsbot check-config      # shows which secrets are set (names only, never values)
+python -m newsbot check-config      # which secrets are set (names only, never values)
 python -m newsbot ingest            # fetch feeds and print a summary
-python -m newsbot calendar          # upcoming Islamic occasions and election-silence reminders
-python -m newsbot corrections       # regenerate the public corrections page
-python -m newsbot health            # token health (needs credentials)
+python -m newsbot run               # full cycle (needs Supabase and AI keys; posts if mode is auto and platforms are enabled)
 ```
+
+Other commands: `calendar`, `corrections`, `health`, `listen --minutes N`, `cleanup`, `card-test`, `test-post`, `db-check`, `ai-check`, `token-issued`, `notify`.
 
 ## Secrets
 
-Secrets are **never** committed. Locally they live in `.env` (gitignored); in production they are GitHub
-Actions secrets, and the Telegram Worker uses Cloudflare secrets. [`.env.example`](.env.example) lists every
-name. Each platform module reads only its own credentials, so a problem on one platform cannot leak into
-or break another.
+Never committed. Locally in `.env`; in production as GitHub Actions secrets. [`.env.example`](.env.example) lists every name. Each platform module reads only its own credentials.
 
 | Platform | Secrets |
 |---|---|
 | Facebook | `FB_APP_ID`, `FB_APP_SECRET`, `FB_PAGE_ID`, `FB_PAGE_TOKEN` (Page token, never expires) |
-| Instagram | `IG_APP_ID`, `IG_APP_SECRET`, `IG_USER_ID`, `IG_TOKEN` (60 days, refreshable; Instagram's own ID/secret, not the main app's) |
-| Threads | `TH_APP_ID`, `TH_APP_SECRET`, `TH_USER_ID`, `TH_TOKEN` (60 days, refreshable; Threads' own ID/secret) |
-| Token refresh | `GH_PAT_SECRETS` (fine-grained PAT, secrets:write on this repo only) |
-| Telegram (private owner feed) | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_ID`, `TELEGRAM_WEBHOOK_SECRET` (only for the approval Worker). `TELEGRAM_CHANNEL_ID` is **optional**: leave it empty unless you later turn on a public channel |
-| Bluesky (**not planned**, leave empty) | `BSKY_HANDLE`, `BSKY_APP_PASSWORD`. The module stays in the code, disabled in `config.json` |
-| Supabase | `SUPABASE_URL`, `SUPABASE_KEY` |
-| AI | `GROQ_API_KEY`, `GEMINI_API_KEY` |
+| Instagram | `IG_APP_ID`, `IG_APP_SECRET`, `IG_USER_ID`, `IG_TOKEN` (60 days, auto-refreshed). Optional never-expiring route through the Facebook Page token: `/igsetup` |
+| Threads | `TH_APP_ID`, `TH_APP_SECRET`, `TH_USER_ID`, `TH_TOKEN` (60 days, auto-refreshed) |
+| Telegram | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_ID` (private chat). `TELEGRAM_CHANNEL_ID` and `TELEGRAM_WEBHOOK_SECRET` are optional and unused |
+| Supabase | `SUPABASE_URL`, `SUPABASE_KEY` (a service-role key; `sb_secret_` keys go in the `apikey` header only) |
+| AI drafting | `GROQ_API_KEY`, `GEMINI_API_KEY` |
+| AI illustration (optional, free) | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (Workers AI permission) |
+| Token refresh by the health job | `GH_PAT_SECRETS` (fine-grained PAT, secrets:write on this repo only) |
+| Bluesky (not planned) | `BSKY_HANDLE`, `BSKY_APP_PASSWORD` |
 
-To upload a filled-in `.env` to GitHub Actions secrets: `gh auth login`, then `./scripts/set_github_secrets.sh`.
+Repository variable `BOT_ENABLED=true` switches on all scheduled workflows. Tokens sent from Telegram (`/fbtoken`, `/igtoken`, `/thtoken`) and automatic refreshes are saved in the Supabase `settings` table and override the GitHub secret.
 
-**Starting from a loosely labelled credentials file** (for example "Insta Access token", "Thread App Secret"):
-
-```bash
-python scripts/import_credentials.py path/to/credentials.txt   # writes .env with the canonical names above
-set -a; . ./.env; set +a
-python scripts/resolve_ids.py                                  # prints IG_USER_ID and TH_USER_ID (not secret); add them to .env
-./scripts/set_github_secrets.sh
-python -m newsbot check-config                                 # names only, never values
-```
-
-The importer prints which names were set or missing, never the values. It skips short-lived and user-level
-tokens (they are only stepping stones to the Page token), refuses to overwrite an existing `.env` without
-`--force`, and the credentials file itself must stay outside the repository. Delete it once the secrets are in
-GitHub.
-
-Meta setup (one app `HR-Publisher`, three use cases, no Page-to-Instagram link) is documented step by step in
-[`docs/meta-setup.md`](docs/meta-setup.md). Rotate any credential that has ever been pasted into a chat,
-ticket or file outside the secret stores.
-
-## Telegram owner feed (private)
-
-No public channel is needed. The bot sends everything to your own private chat with it
-(`TELEGRAM_OWNER_ID`; start the chat once by sending the bot a message):
-
-| Message | When | Switch in `config.json` (`owner_feed`) |
-|---|---|---|
-| Post summary: which platforms published (or would have, in a dry run) and which failed | Every post | `posts` |
-| `ERROR in ...` with the detail | A pipeline error | `errors` |
-| Daily token and platform health report | Daily 18:10 IST; a failure is always sent | `daily_health_report` |
-| `ERROR: workflow '...' failed` with a link to the run | Any scheduled workflow fails | always on |
-
-The feed never raises: if Telegram is down or unconfigured, publishing carries on. Weekly insights and a
-per-post log in the database are still on the roadmap.
-
-## Running the project (dry run)
-
-`python -m newsbot run` (workflow **run (fetch, store, draft)**, hourly once `BOT_ENABLED=true`, or *Run workflow*
-by hand) does a full cycle: fetch feeds, skip stories already stored, save articles, extract and verify claims,
-draft with the AI, run the safety checks, save claims and drafts, and send each draft to your Telegram **for review**.
-**Nothing is published.** Review mode, the disabled platform flags and a dry-run publisher all stop that, and
-real posting stays off until the approval Worker and the visual cards exist.
-
-Every run also leaves a detailed record:
-
-| Where | What |
-|---|---|
-| `logs/<name>-<time>.log` | Full DEBUG log with every secret value removed. Uploaded as a downloadable **Actions artifact** (14 days) |
-| Supabase `run_logs` | Status, summary counts and the log text (last 200 KB) |
-| Telegram | The log file itself, sent to your private chat (`owner_feed.log_file`: `always`, `on_error` or `never`) |
-
-AI models: `config.json` lists several candidates per provider and tries them in order, skipping any that return
-400/403/404 (provider model names change; `gemini-2.0-flash` was shut down on 2026-06-01). Run the **ai-check** workflow
-to see which models your keys can use and get a test result on Telegram. Articles are marked `processed` after
-drafting (`db/migrations/003_articles_processed.sql`), so stories stored during an AI outage are retried.
-
-Articles, claims and drafts are stored in the `articles`, `claims` and `drafts` tables. The `run_logs` table and
-`articles.source_name` column come from `db/migrations/002_run_logs.sql` (also in `db/schema.sql`); run it once
-in the Supabase SQL editor if you applied the schema before.
-
-## Launch checklist
-
-1. Merge the open pull requests, then add every secret (see Secrets) and the variable `BOT_ENABLED=false`.
-2. Supabase: paste `db/schema.sql` into the SQL editor and run it. It ends with the `service_role` grants that Supabase
-   now requires for new tables. If you ran an older copy and db-check says `42501 permission denied`, run
-   `db/grant_service_role.sql` once. The `tokens` rows are then created by the health job.
-3. Actions, **Daily health (tokens)**, *Run workflow*. Expect a Telegram report with three platform lines.
-4. Actions, **test-post**, platform `facebook`, leave *live* unticked (dry run), then tick *live*. The post
-   appears on the Page and is deleted again. Repeat for `threads` and `instagram` (needs a public JPEG URL).
-   Instagram and Threads test posts cannot be deleted through the API: remove them by hand.
-5. Turn platforms on one at a time in `config.json` (`enable`), keep `mode` at `review`, then set
-   `BOT_ENABLED=true`. Run in review mode for at least 2 weeks before allowing automatic posting.
+To upload a filled-in `.env` to GitHub: `gh auth login`, then `./scripts/set_github_secrets.sh`. To start from a loosely labelled credentials file: `python scripts/import_credentials.py FILE`, then `python scripts/resolve_ids.py`, then `./scripts/set_github_secrets.sh` (the importer prints names only, skips short-lived tokens and refuses to overwrite `.env` without `--force`). Keep credential files outside the repository and delete them afterwards. Meta setup is in [`docs/meta-setup.md`](docs/meta-setup.md). **Rotate any credential that was ever pasted into a chat, ticket or file.**
 
 ## GitHub Actions
 
-Times are IST in the plan; cron runs in UTC.
+Cron runs in UTC; all scheduled workflows do nothing unless the variable `BOT_ENABLED` is `true`. GitHub often skips scheduled runs on the free tier, so the listener compensates (see below).
 
 | Workflow | When | Purpose |
 |---|---|---|
-| `tests` | every push and PR | pytest |
-| `ingest` | hourly | collect, translate, score |
-| `breaking` | every 15 min | priority (Palestine/crisis) feeds, event-driven lane |
-| `calendar` | daily 05:00 IST | occasions and election-silence reminders |
-| `health` | daily 18:10 IST | token check; alert 10 days before expiry |
-| `keepalive` | 1st and 15th | keep the free Supabase project awake |
+| `ingest` | every 4 hours (`5 */4 * * *`) and started by the listener when overdue | the full run |
+| `listen` | a new one queued every 30 minutes; each stays up 3 h 50 min | Telegram commands in seconds, fast track every 5 minutes, catch-up of skipped runs |
+| `health` | daily 18:10 IST | token check, expiry alert 10 days ahead |
+| `calendar` | daily 05:00 IST | Islamic occasions, election-silence reminders |
+| `keepalive` | 1st and 15th | keeps the free Supabase project awake |
+| `tests` | every push | pytest |
+| `card-test` | manual | renders and uploads a sample feed and story card, sends them to Telegram |
+| `test-post` | manual | harmless test post to one platform (dry run unless *live*) |
+| `db-check`, `ai-check` | manual | database access check; which AI models your keys can use |
+| `approvals` | manual only | one-off Telegram poll; do not run while the listener is active |
+| `breaking` | schedule off | superseded by the fast track |
 
-Every scheduled workflow is gated on the repository variable **`BOT_ENABLED`** and does nothing until you set it to
-`true` (Settings, Secrets and variables, Actions, Variables). They can always be run by hand with *Run workflow*.
+The listener has `actions: write` so it can start `ingest.yml` when no full run has begun for `run.catchup_hours` (4.7). Start the listener once by hand after deploying (Actions, **listen**, Run workflow); a new one starts to replace it before it ends. To apply new code at once, cancel the running listener and start a new one.
 
-**Minutes warning:** `breaking` at 15-minute intervals is about 2,900 minutes a month, which exceeds the 2,000 free
-minutes on a *private* repository. Either slow it to `*/30` or hourly, or make the repository public (unlimited minutes;
-safe only because no secrets are stored in it). Check your Actions usage before enabling it.
+## Telegram (private owner chat)
 
-## Go-live checklist
+Every message goes to your own chat with the bot. Post message: status line (✅ posted, ⚠️ partly posted, ❌ not posted), headline, one line per platform with a link, a plain-words "Fix:" if something failed, the source, and `Image:` lines (photo used, wording tailored for which platforms, or why an image step failed). Also: daily digest (08:00 IST), weekly reach report (Monday 09:00 IST), daily health report (18:10 IST), run logs, and `ERROR: workflow ... failed` with a link.
 
-1. Apply [`db/schema.sql`](db/schema.sql) in Supabase; record token issue dates in the `tokens` table.
-2. Add all secrets (see above). Add a second admin to the Page and the Meta app.
-3. Test each platform separately with a harmless post; switch one off and confirm the others still post.
-4. Deploy the Worker (`cd worker && npx wrangler deploy`), set its secrets, register the Telegram webhook with the secret token.
-5. Lawyer review of the legal section of [`docs/project-plan.md`](docs/project-plan.md) (India BNS 196/299/353, IT Act; UK/EU/US defamation).
-6. Two-week dry run in review mode, then soft launch at 3 to 4 posts a day. Switch to `auto` for Green and Amber only after 4 weeks; Red stays manual forever.
+| Command | What it does |
+|---|---|
+| `/status` | what is running, caps, pause and fast-track state |
+| `/pause`, `/resume` | stop or restart all posting (drafts wait, nothing is lost) |
+| `/fast on` or `off` | the fast track |
+| `/celeb list`, `add NAME`, `remove NAME` | the celebrity watchlist |
+| `/fbtoken <token>` | check and save a Facebook token (turned into the never-expiring Page token); `reset` returns to the secret |
+| `/igtoken <token>`, `/thtoken <token>` | same for Instagram and Threads (exchanged for 60-day tokens) |
+| `/igsetup` | switch Instagram to the never-expiring Facebook Page route; `/igsetup login` goes back |
+| `/tokenstatus` | asks Facebook, Instagram and Threads whether each token works now, with the exact error |
+| `/help` | list of commands |
+
+Only the owner's private chat is obeyed. Messages that contain a token are deleted after processing. `owner_feed` in `config.json` switches message types and the run-log policy.
+
+## Posts, photos and stories
+
+**One post per platform** (`variants.py`, `template.py`, `platform_style`): after the draft passes every safety check, one extra AI call rewrites it separately for Facebook, Instagram and Threads using only the draft's facts. Code rejects a rewrite that adds a number, link, emoji or hashtag, uses engagement bait ("like if", "tag a friend"), or loses the on-ground label; that platform then uses the standard text.
+
+| Platform | Style |
+|---|---|
+| Facebook | headline, two short paragraphs, optional open question, 3 hashtags; source link in the first comment (link posts reach less; if the token lacks `pages_manage_engagement` the link goes into the caption); 4:5 image |
+| Instagram | first line is a hook under about 120 characters (the part visible before "more"), short lines, 5 hashtags, "Save this post for reference.", no links; 4:5 image |
+| Threads | short and conversational (about 300 characters), one topic tag, short outlet link when it fits |
+
+Every caption is fitted to its limit (`caption_limits`; Threads 480) while keeping the source line and photo credit. The real outlet is named even for Google News links. The kicker is **BREAKING:** or **UPDATE:** when it applies.
+
+**Photos** (`photos.py`): Wikimedia Commons only; public domain, CC0 and CC BY only (no share-alike, non-commercial or no-derivatives); a named author is required; no graphic or child content; minimum size from `photos.min_width` and `photos.min_height`. The caption says `Representative photo: <author> / Wikimedia Commons, <licence>`. For war zones (Gaza, Sudan, Yemen, Syria) only photos of destruction taken in `photos.war_min_year` (2024) or later qualify, so an undamaged skyline never illustrates a catastrophe.
+
+**No photo found:** `ai_art.py` makes an abstract symbolic illustration with free Cloudflare Workers AI (FLUX.1 schnell): no people, real places, flags or text, labelled "AI-GENERATED ILLUSTRATION" on the image and in the caption. Own budget `ai_art.max_per_day` (40); when Cloudflare's free allowance runs out the bot stops until the next day and uses the plain brand card. Stay on the Cloudflare Free plan so nothing can be charged.
+
+**Cards** (`cards.py`): feed card 1080x1350 (4:5) and story card 1080x1920 (9:16): darkened photo background, brand and date, topic badge, kicker, headline, `#HaqqReport`; stories print the credit on the image. Uploaded to the public Supabase Storage bucket `cards` (`db/migrations/004_cards_bucket.sql` creates it by hand if needed). If the feed card cannot be made, Facebook and Threads post text only and Instagram is skipped.
+
+**Stories** (`enable.facebook_story`, `enable.instagram_story`): one story per post on each platform. If the daily cap or per-run cap blocks the feed post, the story still goes out once (`stories.max_per_day`, 30) and the draft stays queued. `/pause` stops stories too.
+
+Run **card-test** to see the card, story and caption in Telegram.
+
+## Fast track, celebrities, Islamophobia
+
+- **Fast track** (`fasttrack.py`, `severity.py`; `fast_track` in config): every 5 minutes inside the listener, reads the fast sources (`"fast": true` in `data/sources.seed.json`) and Google News searches, keeps stories under 3 hours old that are on mission and severity 2 or 3 (mass casualties, ceasefire changes, ICJ/ICC rulings, famine declarations, attacks on mosques or protected sites), and posts the best 2 per cycle, at most 6 a day, ahead of the queue (extra `extra_daily_posts` 4 above the daily cap). Severity 3 carries BREAKING. One trusted Tier A/B source is enough.
+- **Celebrities** (`celebrity.py`; `celebrity` in config, edit with `/celeb`): the headline must name the person and the event must be notable (match, award, signing, statement, charity) from a trusted outlet; gossip, relationships and health rumours are blocked. **One post per person per day (IST)** combining every outlet's report; a second post labelled UPDATE only for critical news, once a day. The day lock is a database row.
+- **Islamophobia Watch** (`islamophobia.py`): Google News searches plus CAIR and Tell MAMA (labelled "reported by", Tier C). One slot per run is reserved. Drafting rules: what happened, where, who reported it; no motive guessing, no suspect description unless police or a court gave it, no generalising about a community.
+
+## Reliability
+
+- **No duplicates:** a URL is processed once; each article, draft and celebrity day is claimed atomically in the database; a draft with a headline similar to any from the last 72 hours is skipped; a unique index allows one post per platform per draft (`db/migrations/005_posts_unique.sql`).
+- **Freshness and cleanup:** only stories from the last `INGEST_MAX_AGE_HOURS` (48) are posted; articles, claims, drafts and posts older than `retention.hours` (72) are deleted on every run, run logs after 7 days, engagement records after 60 days (`python -m newsbot cleanup` runs it by hand).
+- **Platform isolation and pause:** each platform runs on its own with one retry. After 3 failures (`PLATFORM_FAILURES_BEFORE_PAUSE`) it is paused for `PLATFORM_PAUSE_MINUTES` (30) and Telegram shows the last real error.
+- **Rate limits:** Meta throttle errors (codes 4, 17, 32, 613, "request limit") never pause a platform. A cooldown of `rate_limit_cooldown_minutes` (60) is stored in Supabase and respected by every workflow. Engagement reads are limited to `insights.max_calls_per_run` (20) and each post is read at most twice, because small Instagram accounts have a small call allowance.
+- **Catch-up:** `retry_unposted` retries drafts that reached no platform; `retry_missing_platforms` posts to the platforms a published draft missed (24 hours, stories 6 hours, 3 tries).
+- **Skipped GitHub schedules:** the listener starts the full run itself when none has begun for 4.7 hours.
+- **Tokens:** Facebook Page token never expires; Instagram and Threads tokens are refreshed every 20 days by the bot (saved in Supabase); `/igsetup` makes Instagram never expire; `/tokenstatus` shows the live state.
+- **Database down:** nothing is posted (the daily cap cannot be checked).
+
+## Reach
+
+`insights.py` reads engagement per post (Facebook reactions, comments, shares; Threads likes, replies, reposts; Instagram likes, comments, saves, shares) and keeps a small record for 60 days. The Monday report shows the best posting hours, topics and platforms and the top posts; use it to move the cron times in `ingest.yml`. Instagram and Threads insights need the insights permission on their tokens. The daily digest shows posts per platform, stories, full runs of the 6 expected, queue size and warnings.
+
+## Configuration (`config.json`)
+
+| Key | What it controls |
+|---|---|
+| `mode` | `auto` posts by itself; `review` only previews in Telegram |
+| `red_needs_approval` | `false`: Red posts too (flagged); `true`: Red waits |
+| `enable` | per platform on/off, including `facebook_story` and `instagram_story` |
+| `limits` | `MAX_POSTS_PER_DAY` 10, `INGEST_MAX_AGE_HOURS` 48, failure pause and cooldown minutes, minimum Palestine posts |
+| `run` | `max_articles`, `max_per_source`, `off_mission_max`, `max_posts_per_run`, `dedupe_days`, `catchup_hours` |
+| `pillars` | reserved slots per run for Palestine and Islamophobia |
+| `fast_track`, `celebrity` | fast track limits; celebrity watchlist and rules |
+| `platform_style`, `caption_limits`, `hashtags`, `source_names`, `brand` | per-platform wording and hashtag counts, length limits, tags, outlet names, card branding |
+| `photos`, `ai_art`, `cards`, `stories` | photo rules, AI illustration budget, cards on/off, story cap |
+| `insights`, `digest`, `owner_feed`, `approvals` | engagement reads, digest hour, Telegram message switches, approval buttons (off) |
+| `retention` | cleanup ages |
+| `ai` | provider order (Groq, Gemini) and model lists; unavailable models are skipped |
+| `watch_topics`, `mission_keywords`, `designated_group_keywords`, `trusted_publishers`, `scoring` | what counts as on mission and how stories rank |
+| `meta` | Graph API versions and token lifetimes |
+| `election_silence`, `schedule_ist`, `site` | blackout dates, schedule notes, website base URL |
+
+## Setting up from scratch
+
+1. Merge to main, add the secrets above and the variable `BOT_ENABLED=false`.
+2. Supabase: run `db/schema.sql` (it ends with the `service_role` grants), then `db/migrations/003_articles_processed.sql` and `005_posts_unique.sql` (`002` and `004` are optional). Run **db-check**.
+3. Run **health** (three platform lines on Telegram), **ai-check** and **card-test**.
+4. Run **test-post** for each platform (dry run, then *live*). Facebook test posts are deleted again; Instagram and Threads test posts must be removed by hand.
+5. Set `BOT_ENABLED=true`, start **listen** once, send `/status`, then `/tokenstatus` and `/igsetup`.
+6. Watch the first posts in Telegram. Pause any time with `/pause` or by setting `BOT_ENABLED` to `false`. To go back to previews only, set `mode` to `review`.
+
+## Troubleshooting
+
+| Telegram says | Meaning and fix |
+|---|---|
+| Token is expired or invalid | Create a new token; send `/fbtoken`, `/igtoken` or `/thtoken <token>`; check with `/tokenstatus` |
+| Access token lacks a permission (#200) | Regenerate with the needed permissions (Facebook `pages_manage_posts`, `pages_manage_engagement`; Instagram `instagram_business_content_publish`; Threads `threads_content_publish`) |
+| The platform is limiting how often we can call it | Nothing to do: a 60-minute cooldown, then the post is retried |
+| Paused after repeated failures. Last error: ... | Fix the named error; the platform retries after 30 minutes |
+| No image was available for this post | Run **card-test**; check the `cards` bucket and Supabase key |
+| `Image:` line says "none found" or "AI illustration not set up" | No licensed photo matched (normal for Gaza after 2024 filter); add the Cloudflare secrets for illustrations |
+| Nothing responds to commands | No listener is running: Actions, **listen**, Run workflow |
 
 ## Break-glass
 
-If the Meta app itself is restricted, all three Meta platforms stop at once. Telegram, Bluesky and the website keep
-the audience. Recovery steps (create `HR-Publisher-2`, re-add use cases and testers, swap secrets) are in
-[`docs/meta-setup.md`](docs/meta-setup.md). Screenshot every restriction notice and keep an appeals log.
+If the Meta app itself is restricted, all three Meta platforms stop at once. Recovery steps (create `HR-Publisher-2`, re-add use cases and testers, swap secrets) are in [`docs/meta-setup.md`](docs/meta-setup.md). Screenshot every restriction notice and keep an appeals log.
 
 ## Reporting a security problem
 
-Do not open a public issue for a leaked credential or vulnerability. Contact the maintainer directly, and rotate the
-affected secret immediately.
-
-
-## Draft quality rules
-
-- **What gets drafted:** each run picks on-mission stories first (`watch_topics` and `mission_keywords` in `config.json`), best source tier then newest, with at most `run.max_per_source` per source and `run.off_mission_max` off-topic stories.
-- **Casualty figures** must name their source in the same sentence (OCHA, UNRWA, a ministry, a named outlet). "The agency said" fails the safety check.
-- **Cleanup:** headlines are plain text (no markdown or quotes). Drafts about death, injury or disaster have all emoji removed.
-
-## Going live (auto mode)
-
-`mode` is `auto` in `config.json`. Each hourly run drafts stories, checks them, and then:
-
-- **Green and Amber** stories post straight to Facebook and Threads, are recorded in `posts`, and appear in your Telegram feed with the platform post ids. Instagram stays off until image cards exist.
-- **Red** stories (sensitive, designated-group mentions, graphic, and so on) are never auto-posted. They arrive in Telegram with **Approve and post** and **Reject** buttons, handled by the `approvals` workflow every 5 minutes.
-
-Safeguards: `MAX_POSTS_PER_DAY` (10) is enforced; nothing posts if the database is unreachable (the cap could not be checked); every claim needs a source, casualty figures need a named source, and a failed safety check twice means the story is skipped.
-
-Reviewing later: use Telegram or the platform itself. Delete a post on the platform and, if it was wrong, add a public correction (`corrections` workflow).
-
-To pause: set the repository variable `BOT_ENABLED` to `false`, or set `mode` back to `review` in `config.json`.
-
-## Post template and cards
-
-Every post follows one template (`newsbot/template.py`): headline, body trimmed to fit, `Source: <outlet>`, hashtags. Limits per platform are in `config.json` (`caption_limits`; Threads is 480 to stay under its 500 cap). Facebook keeps the source link in a first comment; if the Page token lacks `pages_manage_engagement`, the link is added to the caption instead and the post still counts as posted.
-
-Every post carries a branded 1080x1080 card made by `newsbot/cards.py` (our own design, not third-party photos), uploaded to a public Supabase Storage bucket named `cards` (created automatically; `db/migrations/004_cards_bucket.sql` is the manual fallback). If a card cannot be made the post goes out as text. Run Actions, **card-test** to see the template and card in your Telegram.
-
-## No duplicates, freshness, cleanup, notifications
-
-- **Duplicates:** a story URL is processed once (`articles`); a new draft whose headline is similar to any draft from the last 72 hours is skipped; a draft is claimed in the database before posting so two jobs can never both post it; `db/migrations/005_posts_unique.sql` adds a unique index on (draft, platform).
-- **Freshness:** only stories published in the last 48 hours are drafted or posted (`limits.INGEST_MAX_AGE_HOURS`); undated items are ignored.
-- **Cleanup:** every run deletes articles, claims, drafts and posts older than 72 hours (`retention.hours`) and run logs older than 7 days. Sources, creators, corrections, tokens and settings are kept. Manual run: `python -m newsbot cleanup`.
-- **Telegram:** one status line (✅ posted, ⚠️ partly posted, ❌ not posted, 🔴 needs approval, 🟢 run ok), the headline, one line per platform, and a plain-words "Fix:" when something failed.
-- **Instagram** is on; it needs the card image, so a card failure means Instagram is skipped for that story while Facebook and Threads still post.
-
-## Updating the Facebook token from Telegram
-
-Send the bot `/fbtoken <token>` (or just `/fbtoken` for the steps). Paste a **User** token from the Graph API Explorer (permissions: `pages_show_list`, `pages_manage_posts`, `pages_manage_engagement`, `pages_read_engagement`). The bot exchanges it for a long-lived user token, takes the never-expiring Page token for `FB_PAGE_ID`, verifies it with Facebook's debug endpoint (valid, expiry, permissions, right Page), saves it in the Supabase `settings` table, deletes your message, and replies with the result. A token that expires is refused. The saved token overrides the `FB_PAGE_TOKEN` GitHub secret from the next run; `/fbtoken reset` goes back to the secret. `/tokenstatus` shows the token in use. The listener answers within seconds. Needs `FB_APP_ID`, `FB_APP_SECRET`, `FB_PAGE_ID` secrets. The daily health report also shows expiry and missing permissions.
-
-## Schedule (6 runs a day)
-
-The main run (`ingest.yml`) is every 4 hours: 05:35, 09:35, 13:35, 17:35, 21:35 and 01:35 IST. The 15-minute priority run (`breaking.yml`) is switched off. Each run posts at most 2 stories (`run.max_posts_per_run`); extra ready stories wait and go out in a later run within 48 hours; the daily cap is 10 (`limits.MAX_POSTS_PER_DAY`). Telegram is handled by the always-on listener (see below). Once you know when your audience is online, change the cron times in `ingest.yml` (GitHub uses UTC).
-
-## Posting everything directly
-
-Red stories are posted like the rest (`red_needs_approval: false` in `config.json`); the Telegram message shows the lane and the reason it was flagged ("Flagged: ...") so you can review the risky ones first. Approve/Reject buttons are off (`approvals.buttons`): they need a listener that answers within seconds, and GitHub's 5-minute schedule is often skipped. Every Telegram post message carries a direct link to each post: open it and delete it on the platform (Instagram and Threads cannot be deleted by API anyway). Your Telegram commands (such as `/fbtoken`) are answered by the listener within seconds.
-
-## Telegram listener and the 4-hour run
-
-- `ingest.yml` ("run (fetch, store, draft)") runs the whole pipeline every 4 hours.
-- `listen.yml` keeps a long-polling connection to Telegram, so commands such as `/fbtoken` and `/tokenstatus` get an answer in seconds (better than every 5 minutes). GitHub often skips frequent schedules, so instead of a 5-minute cron the listener stays alive for 3 hours 50 minutes, and a new one starts every 3 hours and replaces the old one. Idle listeners store and send no logs. Public repo, so the minutes are free.
-- `approvals.yml` is now a manual one-off check only (do not run it while the listener is active; Telegram allows one reader at a time).
-- After deploying, start the listener once by hand (Actions, **listen**, Run workflow); after that the schedule keeps it going.
-
-## Fast track, celebrities, Islamophobia and reach
-
-**Fast track** (`fasttrack.py`, runs inside the listener every 5 minutes): fetches the fast sources (`"fast": true` in `data/sources.seed.json`), keeps stories under 3 hours old that are on mission and rated severity 2 or 3 by `severity.py` (mass casualties, ceasefire changes, ICJ/ICC rulings, famine declarations, attacks on mosques or protected sites, and so on), ranks them (severity, tier, newest) and posts the best 2 per cycle, at most 6 a day, ahead of the queue. Critical ones carry **BREAKING:**. One trusted Tier A/B source is enough. Fast posts may exceed the daily cap by `extra_daily_posts` (4). Stop it with `/fast off`.
-
-**No duplicates** (the fast track uses the same database guards as the 4-hour run): each article is claimed atomically in the database before processing; a headline similar to any draft of the last 72 hours is skipped; each draft is claimed before posting; one post per platform per draft is enforced by a unique index.
-
-**Celebrities** (`celebrity.py`): a watchlist in `config.json` (edit in Telegram with `/celeb list`, `/celeb add NAME`, `/celeb remove NAME`). The headline must name the person; the event must be notable (match, award, signing, statement, charity) from a trusted outlet; gossip, relationships and health rumours are blocked. **One post per person per day (IST)**, combining every outlet's report of the day. A second post, labelled **UPDATE:**, only for critical news (death, arrest, major title, retirement), at most once a day. The day lock is a database row, so two jobs cannot both post the same person.
-
-**Islamophobia Watch** (`islamophobia.py`): Google News searches (islamophobia, mosque attacks, hijab and bans, Quran desecration; only trusted publishers count), CAIR and Tell MAMA (labelled "reported by", Tier C). One slot per run is reserved for it, as for Palestine. Drafting rules: say what happened, where and who reported it; no motive guessing, no suspect description unless police or a court gave it, no generalising about any community.
-
-**Reach**: `insights.py` reads engagement per post (Facebook reactions, comments, shares; Threads views, likes, replies, reposts; Instagram reach, likes, saves, shares) and keeps a small record for 60 days. Every Monday after 09:00 IST you get a Telegram report with the best posting hours, topics and platforms and the top posts. Threads and Instagram insights need the insights permission on their tokens; if missing, the report shows what it could read. Use the report to move the 4-hour run times in `ingest.yml` to your peak hours.
-
-**Telegram commands**: `/status`, `/pause`, `/resume`, `/fast on|off`, `/celeb ...`, `/fbtoken`, `/tokenstatus`, `/help`.
-
-See [docs/status.md](docs/status.md) for plan versus build.
-
-## Photos and Stories
-
-- **Photos** (`newsbot/photos.py`): every post gets a related photo from Wikimedia Commons only. Accepted licences: public domain, CC0, CC BY.
-  Share-alike, non-commercial and no-derivatives files are rejected in code, as are files with a restriction note, files without a named
-  author, graphic or child content, and small images. The caption always says `Representative photo: <author> / Wikimedia Commons, <licence>`
-  (it shows the place, building or person, not necessarily the event). No safe photo found: a plain brand card is used.
-- **Cards** (`cards.build`): 1080x1080 feed card and 1080x1920 story card (photo darkened as background, brand + date, topic badge,
-  kicker, headline, `#HaqqReport`). Stories print the photo credit on the image.
-- **Stories**: Facebook (`photo_stories`) and Instagram (`STORIES`) for every post (`enable.facebook_story`, `enable.instagram_story`).
-  When the daily or per-run cap blocks the feed post, the story still goes out once and the draft stays queued. `/pause` stops everything.
-- **Telegram** shows an `Image:` line per post (photo used, or why a card failed, e.g. the Supabase Storage error).
-- Run the **card-test** workflow after deploying: it sends the feed card and story card to your Telegram.
-- Stories need `instagram_business_content_publish` (Instagram) and Page `pages_manage_posts` (Facebook).
-- **War zones** (Gaza, Sudan, Yemen, Syria): only photos of destruction taken in 2024 or later (`photos.war_min_year`) are used, so a calm skyline never illustrates a story about a catastrophe. No match means the brand card, not an old photo.
-- **AI illustration fallback** (`newsbot/ai_art.py`): only when no licensed photo exists. Free Cloudflare Workers AI (FLUX.1 schnell), fixed symbolic prompts (no people, places, flags or text), labelled "AI-generated illustration" on the image and in the caption. Own budget `ai_art.max_per_day` (40); when Cloudflare's free allowance is used up the bot stops until the next day and uses the plain brand card. Secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`. Feed cards are 1080x1350 (4:5).
-
-## One post, written for each platform
-`newsbot/variants.py` rewrites each verified draft separately for Facebook, Instagram and Threads (one extra free AI call). Only the facts of the draft are allowed; code rejects any rewrite with a new number, a link, emoji, hashtags, engagement bait ("like if", "tag a friend") or a lost on-ground label, and that platform then uses the standard body.
-- **Facebook**: headline, two short paragraphs, optional open question, 3 hashtags; the source link goes in the first comment (link posts reach less); native image.
-- **Instagram**: first line is a hook (under about 120 characters, the part visible before "more"), short lines, 5 hashtags, a soft "save" line, no links; 4:5 image; story for every post.
-- **Threads**: short and conversational, one topic tag (Threads uses a single tag as a topic), real outlet link when short.
-Settings: `platform_style` in `config.json`. Every caption is fitted to its limit with the source and photo credit kept (the Threads "caption too long" error came from a long Google News link plus the credit line). For Google News items the real outlet name is shown, not news.google.com.
-
-## Instagram and Threads tokens from Telegram
-`/tokenstatus` now asks Facebook, Instagram and Threads whether each token works right now and prints the exact error. `/igtoken <token>` and `/thtoken <token>` check and save a new token (short-lived tokens are exchanged for 60-day ones when `IG_APP_SECRET` / `TH_APP_SECRET` are set), delete your message, and apply from the next run; `reset` goes back to the GitHub secret. A platform paused after 3 failures now shows its last real error and tries again after 30 minutes (`limits.PLATFORM_PAUSE_MINUTES`), even inside the long-running listener.
-
-**Never-expiring Instagram:** `/igsetup` switches Instagram posting to the Facebook Page token (which never expires; the Instagram account must be Professional and linked to the Page, and the token needs `instagram_basic` and `instagram_content_publish`). `/igsetup login` goes back. While on the login token, the bot refreshes the Instagram and Threads tokens every 20 days by itself and saves the new one in Supabase.
-
-**Skipped schedules:** GitHub free cron skips about half of the 4-hourly runs. The listener now checks every 10 minutes and, when no full run has started for `run.catchup_hours` (4.7), starts `ingest.yml` itself (`catch_up` in `approvals.py`; needs the `actions: write` permission in `listen.yml`, already set).
-
-**Daily digest and wording check:** at 08:00 IST (first run after) one Telegram message lists yesterday's posts per platform, stories, full runs (of 6 expected), queue size and warnings (`digest` in `config.json`). Each POSTED message now has an `Image:` line saying which platforms got tailored wording or the standard text.
-
-## Instagram rate limits (permanent handling)
-Meta gives small Instagram accounts a small call allowance, and reads count too. What we do about it:
-- Engagement reads (`insights.max_calls_per_run`, 20) happen once per post (twice at most) and stop for a platform at the first throttle error; container status polling is shorter.
-- A throttle error (`code 4/17/32/613`, "request limit") never pauses the platform. A cooldown (`limits.rate_limit_cooldown_minutes`, 60) is stored in Supabase and every workflow respects it.
-- `retry_missing_platforms`: a post that reached Facebook but not Instagram/Threads (limit, outage) is posted to the missing platforms later (24h, stories 6h, at most 3 tries).
+Do not open a public issue for a leaked credential or vulnerability. Contact the maintainer directly and rotate the affected secret immediately.

@@ -15,14 +15,15 @@
     "footer": "Truth beats speed"
   },
   "mode": "auto",
-  "mode_notes": "review = every draft goes to Telegram for approval (first 4 weeks). auto = Green and Amber post automatically, Red always needs approval.",
+  "mode_notes": "review = every draft goes to Telegram for preview and nothing is posted. auto = drafts that pass the checks post by themselves (Red too while red_needs_approval is false).",
   "run": {
     "max_articles": 6,
     "max_telegram_drafts": 5,
     "max_per_source": 3,
     "off_mission_max": 2,
     "dedupe_days": 3,
-    "max_posts_per_run": 2
+    "max_posts_per_run": 2,
+    "catchup_hours": 4.7
   },
   "owner_feed": {
     "note": "Private Telegram messages to the owner (TELEGRAM_OWNER_ID). No public channel needed.",
@@ -160,25 +161,14 @@
     "reminder_days_before": 14,
     "blackouts": []
   },
-  "schedule_ist": {
-    "publish_slots": [
-      "06:30",
-      "13:00",
-      "20:00",
-      "00:30"
-    ],
-    "palestine_brief": "20:30",
-    "calendar_job": "05:00",
-    "weekly_report": "Mon 08:45",
-    "health": "18:10"
-  },
+  "schedule_ist": {"full_run": "every 4 hours (ingest.yml; the listener starts it if GitHub skips it)", "fast_track": "every 5 minutes inside the listener", "calendar_job": "05:00", "weekly_report": "Mon 09:00", "daily_digest": "08:00", "health": "18:10"},
   "site": {
     "base_url": "",
     "base_url_note": "Set once the website is deployed (Cloudflare Pages or GitHub Pages)."
   },
   "approvals": {
     "max_age_hours": 48,
-    "note": "Approve/Reject buttons in Telegram. A draft older than this cannot be posted.",
+    "note": "Approve/Reject buttons are off (buttons=false): everything posts directly and you review afterwards. A draft older than max_age_hours cannot be posted.",
     "buttons": false
   },
   "cards": {
