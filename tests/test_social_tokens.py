@@ -95,3 +95,21 @@ def test_daily_digest_builds_and_sends_once(monkeypatch):
     assert digest.send_daily(s, {}, morning) and "Aid reaches Gaza" in sent[0] and "Full runs: 1 of 6" in sent[0]
     assert not digest.send_daily(s, {}, morning)  # once a day
     assert not digest.send_daily(S(), {}, datetime(2026, 10, 30, 1, 0, tzinfo=timezone.utc))  # before 08:00 IST
+
+
+def test_listener_ends_itself_when_new_code_is_pushed(monkeypatch):
+    from newsbot import approvals
+    monkeypatch.setattr(approvals, "poll", lambda *a, **k: {"handled": 0, "errors": 0, "results": []})
+    monkeypatch.setattr(approvals, "catch_up", lambda *a, **k: False)
+    t = {"now": 0.0}
+    def clock():
+        t["now"] += 100
+        return t["now"]
+    restarted = []
+    out = approvals.listen(None, 600, wait=0, cfg={"fast_track": {"enabled": False}}, sleep=lambda s: None, clock=clock,
+                           updated=lambda: True, restart=lambda: restarted.append(1))
+    assert out.get("restarted_for_new_code") and restarted == [1]
+    t["now"] = 0.0
+    out = approvals.listen(None, 1000, wait=0, cfg={"fast_track": {"enabled": False}}, sleep=lambda s: None, clock=clock,
+                           updated=lambda: False, restart=lambda: restarted.append(2))
+    assert not out.get("restarted_for_new_code") and restarted == [1]

@@ -149,7 +149,7 @@ Cron runs in UTC; all scheduled workflows do nothing unless the variable `BOT_EN
 | Workflow | When | Purpose |
 |---|---|---|
 | `ingest` | every 4 hours (`5 */4 * * *`) and started by the listener when overdue | the full run |
-| `listen` | a new one queued every 30 minutes; each stays up 3 h 50 min | Telegram commands in seconds, fast track every 5 minutes, catch-up of skipped runs |
+| `listen` | a new one queued every 5 minutes (only one waits); each stays up 3 h 50 min, or ends itself within 5 minutes of a new push to main so the new code starts by itself | Telegram commands in seconds, fast track every 5 minutes, catch-up of skipped runs |
 | `health` | daily 18:10 IST | token check, expiry alert 10 days ahead |
 | `calendar` | daily 05:00 IST | Islamic occasions, election-silence reminders |
 | `keepalive` | 1st and 15th | keeps the free Supabase project awake |
@@ -160,7 +160,7 @@ Cron runs in UTC; all scheduled workflows do nothing unless the variable `BOT_EN
 | `approvals` | manual only | one-off Telegram poll; do not run while the listener is active |
 | `breaking` | schedule off | superseded by the fast track |
 
-The listener has `actions: write` so it can start `ingest.yml` when no full run has begun for `run.catchup_hours` (4.7). Start the listener once by hand after deploying (Actions, **listen**, Run workflow); a new one starts to replace it before it ends. To apply new code at once, cancel the running listener and start a new one.
+The listener has `actions: write` so it can start `ingest.yml` when no full run has begun for `run.catchup_hours` (4.7). Start the listener once by hand after deploying (Actions, **listen**, Run workflow); a new one starts to replace it before it ends. New code is picked up automatically: the running listener notices the push, ends, and the queued one starts with it. No manual cancel is needed.
 
 ## Telegram (private owner chat)
 

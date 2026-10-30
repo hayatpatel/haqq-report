@@ -258,8 +258,32 @@ def catch_up(store, cfg: dict, now=None, dispatch=None) -> bool:
         return False
 
 
+def code_updated() -> bool:
+    """True when main on GitHub has moved past the commit this listener started with (new code is waiting)."""
+    import os
+    import subprocess
+
+    sha, repo = os.environ.get("GITHUB_SHA", ""), os.environ.get("GITHUB_REPOSITORY", "")
+    if not (sha and repo):
+        return False
+    try:
+        out = subprocess.run(["git", "ls-remote", f"https://github.com/{repo}.git", "refs/heads/main"],
+                             capture_output=True, text=True, timeout=30, check=True).stdout.split()
+        return bool(out) and out[0] != sha
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def start_new_listener() -> None:
+    import os
+    import subprocess
+
+    subprocess.run(["gh", "workflow", "run", "listen.yml"], check=False, timeout=60,
+                   env={**os.environ, "GH_TOKEN": os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN", "")})
+
+
 def listen(store, minutes: float, *, wait: int = 25, cfg: dict | None = None,
-           sleep=None, clock=None) -> dict:
+           sleep=None, clock=None, updated=None, restart=None) -> dict:
     """Stay on Telegram for `minutes`, answering commands within seconds. Survives temporary errors."""
     import time
 
@@ -272,7 +296,18 @@ def listen(store, minutes: float, *, wait: int = 25, cfg: dict | None = None,
     interval = cfg.get("fast_track", {}).get("interval_seconds", 300)
     next_fast = clock()  # the first fast-track cycle starts right away
     next_catch = clock() + 120
+    next_code = clock() + 300
     while clock() < end:
+        if clock() >= next_code:
+            next_code = clock() + 300
+            if (updated or code_updated)():  # new code was pushed: hand over to a fresh listener running it
+                log.info("new code on main: ending this listener so a new one starts with it")
+                try:
+                    (restart or start_new_listener)()
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("could not request a new listener (%s); the schedule starts one", type(exc).__name__)
+                totals["restarted_for_new_code"] = True
+                break
         if clock() >= next_catch:
             next_catch = clock() + 600
             catch_up(store, cfg)
