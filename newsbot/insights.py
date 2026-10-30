@@ -16,6 +16,7 @@ from . import owner_feed, template
 from .config import load_config
 from .models import Draft
 from .publish import instagram, meta_fb, threads
+from .publish.base import is_rate_limit
 
 log = logging.getLogger("haqq.insights")
 IST = ZoneInfo("Asia/Kolkata")
@@ -42,21 +43,40 @@ def collect(store, cfg: dict | None = None, now: datetime | None = None) -> dict
         "select": "platform,platform_post_id,posted_at,drafts(headline,lane,flags)",
         "posted_at": f"gte.{(now - timedelta(hours=72)).isoformat()}", "limit": "300"})
     cutoff = now - timedelta(hours=ic.get("collect_min_hours", 3))
+    budget = ic.get("max_calls_per_run", 20)  # Instagram gives small accounts a small call allowance: few reads, each post at most twice
+    throttled: set[str] = set()
     for r in rows:
+        if budget <= 0:
+            break
         posted = datetime.fromisoformat(r["posted_at"].replace("Z", "+00:00"))
         fetch = FETCH.get(r["platform"])
         if posted > cutoff or not fetch or not r.get("platform_post_id"):
             continue
         d = r.get("drafts") or {}
+        skey = f"stat:{posted:%Y%m%d}:{r['platform']}:{r['platform_post_id']}"
+        if r["platform"] in throttled:
+            continue
+        try:
+            old = store.get_setting(skey, "")
+            if old:  # a second look at 24h+ only if the first was taken early; otherwise one read per post is enough
+                first_read = json.loads(old).get("r", 99)
+                if first_read >= 20 or (now - posted).total_seconds() < 24 * 3600:
+                    continue
+        except Exception:  # noqa: BLE001
+            pass
+        budget -= 1
         try:
             m = fetch(r["platform_post_id"])
         except Exception as exc:  # noqa: BLE001 - a missing insights permission must not stop the run
             out["failed"] += 1
+            if is_rate_limit(str(exc)):
+                throttled.add(r["platform"])
             log.warning("insights unavailable for %s (%s)", r["platform"], type(exc).__name__)
             continue
         draft = Draft.from_row({"headline": d.get("headline", ""), "body": "", "lane": d.get("lane", "amber"), "flags": d.get("flags")})
         rec = {"t": r["posted_at"], "p": r["platform"], "h": d.get("headline", "")[:90], "c": draft.category,
-               "tp": template.badge(draft, cfg).title(), "m": m, "s": score(r["platform"], m)}
+               "tp": template.badge(draft, cfg).title(), "m": m, "s": score(r["platform"], m),
+               "r": round((now - posted).total_seconds() / 3600)}
         store.set_setting(f"stat:{posted:%Y%m%d}:{r['platform']}:{r['platform_post_id']}", json.dumps(rec))
         out["read"] += 1
     return out

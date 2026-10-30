@@ -30,7 +30,7 @@ def _creds() -> tuple[str, str]:
     return env["IG_USER_ID"], env["IG_TOKEN"]
 
 
-def wait_until_ready(container_id: str, token: str, *, tries: int = 12, delay: float = 5,
+def wait_until_ready(container_id: str, token: str, *, tries: int = 8, delay: float = 4,
                      sleep: Callable[[float], None] = time.sleep) -> None:
     """Poll status_code until FINISHED (avoids 'container not ready')."""
     for _ in range(tries):

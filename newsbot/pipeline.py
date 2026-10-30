@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from . import claims as claims_mod
-from . import cards, islamophobia, safety, template, verify
+from . import cards, islamophobia, ratelimit, safety, template, verify
 from . import celebrity as celeb_mod
 from .config import load_config, platform_enabled
 from .models import Article, Draft, Lane, Tier
@@ -200,7 +200,14 @@ def publish_draft(draft: Draft, image_url: str = "", *, dry_run: bool = True,
         if dry_run:
             results.append(PublishResult(platform, ok=True, skipped=True, extra={"dry_run": True}))
             continue
+        family = platform.removesuffix("_story")
+        until = ratelimit.cooldown_until(store, family)
+        if until:
+            results.append(PublishResult(platform, ok=False, skipped=True, error=f"rate limit cooldown until {until:%H:%M} UTC"))
+            continue
         res = run_platform(platform, job, alert=alert)
+        if not res.ok and res.error.startswith("rate limited"):
+            ratelimit.start_cooldown(store, family, cfg)
         if res.ok and platform in ("threads", "instagram"):
             try:  # a direct link so the owner can open (and delete) the post in one tap
                 mod = threads if platform == "threads" else instagram

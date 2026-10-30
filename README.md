@@ -368,3 +368,9 @@ Settings: `platform_style` in `config.json`. Every caption is fitted to its limi
 **Skipped schedules:** GitHub free cron skips about half of the 4-hourly runs. The listener now checks every 10 minutes and, when no full run has started for `run.catchup_hours` (4.7), starts `ingest.yml` itself (`catch_up` in `approvals.py`; needs the `actions: write` permission in `listen.yml`, already set).
 
 **Daily digest and wording check:** at 08:00 IST (first run after) one Telegram message lists yesterday's posts per platform, stories, full runs (of 6 expected), queue size and warnings (`digest` in `config.json`). Each POSTED message now has an `Image:` line saying which platforms got tailored wording or the standard text.
+
+## Instagram rate limits (permanent handling)
+Meta gives small Instagram accounts a small call allowance, and reads count too. What we do about it:
+- Engagement reads (`insights.max_calls_per_run`, 20) happen once per post (twice at most) and stop for a platform at the first throttle error; container status polling is shorter.
+- A throttle error (`code 4/17/32/613`, "request limit") never pauses the platform. A cooldown (`limits.rate_limit_cooldown_minutes`, 60) is stored in Supabase and every workflow respects it.
+- `retry_missing_platforms`: a post that reached Facebook but not Instagram/Threads (limit, outage) is posted to the missing platforms later (24h, stories 6h, at most 3 tries).

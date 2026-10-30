@@ -51,7 +51,8 @@
     "GAP_HOURS": 3,
     "INGEST_MAX_AGE_HOURS": 48,
     "PLATFORM_FAILURES_BEFORE_PAUSE": 3,
-    "PLATFORM_PAUSE_MINUTES": 30
+    "PLATFORM_PAUSE_MINUTES": 30,
+    "rate_limit_cooldown_minutes": 60
   },
   "scoring": {
     "weights": {
@@ -364,6 +365,7 @@
   "insights": {
     "enabled": true,
     "collect_min_hours": 3,
+    "max_calls_per_run": 20,
     "weekly_report_weekday": 0,
     "weekly_report_hour_ist": 9,
     "retention_days": 60

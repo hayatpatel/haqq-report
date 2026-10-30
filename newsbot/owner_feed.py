@@ -46,7 +46,8 @@ _FIXES = [
      "Add the secret in GitHub, or check the workflow passes it under env."),
     (("platform paused",), "Paused after repeated failures in this run.", "Fix the earlier error; it is tried again at the next run."),
     (("needs an image",), "No image was available for this post.", "Check that the card upload to Supabase Storage works (run card-test)."),
-    (("rate", '"code": 4,', '"code": 17', '"code": 32', '"code": 613'), "The platform is rate limiting us.", "Nothing to do. It retries next run."),
+    (("rate limited:", "rate limit cooldown", '"code": 4,', '"code": 17', '"code": 32', '"code": 613', "request limit"),
+     "The platform is limiting how often we can call it.", "Nothing to do. It waits about an hour and the post is retried automatically."),
 ]
 
 

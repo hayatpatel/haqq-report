@@ -187,6 +187,43 @@ def publish_ready(store, draft_id, draft, cfg: dict, stats: dict, final: bool = 
         stats["publish_failed"] = stats.get("publish_failed", 0) + 1
 
 
+def retry_missing_platforms(store, cfg: dict, stats: dict, limit: int = 2) -> None:
+    """A draft that reached Facebook but not Instagram or Threads (rate limit, outage, pause) gets those platforms again later,
+    for up to 24 hours (stories 6 hours), at most 3 tries, never a platform it already posted to."""
+    if store is None or cfg.get("mode") != "auto":
+        return
+    try:
+        if is_paused(store):
+            return
+        now = datetime.now(timezone.utc)
+        rows = store.select_raw("drafts", {"status": "eq.posted", "decided_at": f"gte.{(now - timedelta(hours=24)).isoformat()}",
+                                           "order": "decided_at.asc", "limit": "40"})
+        wanted = [p for p in ("facebook", "instagram", "threads", "facebook_story", "instagram_story") if cfg.get("enable", {}).get(p)]
+        done_count = 0
+        for row in rows:
+            if done_count >= limit:
+                break
+            decided = datetime.fromisoformat(row["decided_at"].replace("Z", "+00:00"))
+            if now - decided < timedelta(minutes=30):
+                continue  # still being published by another job
+            have = _done_platforms(store, row["id"])
+            missing = [p for p in wanted if p not in have and not (p.endswith("_story") and now - decided > timedelta(hours=6))]
+            if not missing or "facebook" not in have:
+                continue
+            tries_key = f"retry:{row['id']}"
+            tries = int(store.get_setting(tries_key, "0") or 0)
+            if tries >= 3:
+                continue
+            store.set_setting(tries_key, str(tries + 1))
+            skip = set(wanted) - set(missing)
+            results = pipeline.publish_draft(Draft.from_row(row), "", dry_run=False, cfg=cfg, store=store, skip=skip)
+            _record(store, row["id"], results)
+            stats["caught_up"] = stats.get("caught_up", 0) + 1
+            done_count += 1
+    except Exception as exc:  # noqa: BLE001
+        log.warning("catch-up of missing platforms skipped (%s)", type(exc).__name__)
+
+
 def retry_unposted(store, cfg: dict, stats: dict, limit: int = 3) -> None:
     """Auto mode: one more try for Green/Amber drafts from the last 48h that never reached any platform."""
     if store is None or cfg.get("mode") != "auto":
@@ -367,6 +404,7 @@ def run(priority: bool = False, *, store=None, ai_call: Callable[[str], str] | N
     except Exception as exc:  # noqa: BLE001 - measuring reach must never stop posting
         log.warning("insights skipped (%s)", type(exc).__name__)
     retry_unposted(store, cfg, stats)
+    retry_missing_platforms(store, cfg, stats)
     recent = duplicates.recent_headlines(store, cfg.get("retention", {}).get("hours", 72))
 
     ids: dict[str, int | None] = {}

@@ -8,6 +8,7 @@ Isolation rules (docs/meta-setup.md section 8):
 from __future__ import annotations
 
 import json
+import re
 import logging
 import time
 from dataclasses import dataclass, field
@@ -53,6 +54,14 @@ def graph_request(method: str, url: str, *, params: dict | None = None, data: di
         err = payload.get("error", payload)
         raise PublishError(redact(f"HTTP {resp.status_code}: {json.dumps(err)[:400]}"))
     return payload
+
+
+_RATE = re.compile(r'"code":\s*(4|17|32|613|80001|80002|80003|80004|80005|80006|80007|80008|80009|80014)\b|request limit|rate.?limit|too many calls|reduce the amount of data', re.IGNORECASE)
+
+
+def is_rate_limit(text: str) -> bool:
+    """True for Meta's throttling errors (app, user or page call limits). They clear by themselves: wait, do not pause."""
+    return bool(_RATE.search(text or ""))
 
 
 class JsonStateStore:
@@ -113,6 +122,8 @@ def run_platform(platform: str, fn: Callable[[], str], *, store: JsonStateStore 
             if attempt < retries:
                 sleep(2)
 
+    if is_rate_limit(last_error):  # throttled, not broken: no failure count, no pause; the caller sets a cooldown
+        return PublishResult(platform, ok=False, error="rate limited: " + last_error)
     failures = int(state.get("failures", 0)) + 1
     paused = failures >= limit
     store.set(platform, {"failures": failures, "paused": paused, "last_error": last_error[:400], "paused_at": time.time()})
