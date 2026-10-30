@@ -362,6 +362,8 @@ def run(priority: bool = False, *, store=None, ai_call: Callable[[str], str] | N
         from . import insights
         stats["insights"] = insights.collect(store, cfg)["read"]
         insights.weekly_report(store, cfg)
+        from . import digest
+        digest.send_daily(store, cfg)
     except Exception as exc:  # noqa: BLE001 - measuring reach must never stop posting
         log.warning("insights skipped (%s)", type(exc).__name__)
     retry_unposted(store, cfg, stats)

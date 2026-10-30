@@ -6,6 +6,7 @@
     "instagram": {"max_chars": 600, "hashtags": 5, "hook_chars": 120, "cta": "Save this post for reference."},
     "threads": {"max_chars": 300, "hashtags": 1}
   },
+  "digest": {"enabled": true, "hour_ist": 8},
   "ai_art": {"enabled": true, "max_per_day": 40},
   "stories": {"max_per_day": 30},
   "brand": {

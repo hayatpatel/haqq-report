@@ -366,3 +366,5 @@ Settings: `platform_style` in `config.json`. Every caption is fitted to its limi
 **Never-expiring Instagram:** `/igsetup` switches Instagram posting to the Facebook Page token (which never expires; the Instagram account must be Professional and linked to the Page, and the token needs `instagram_basic` and `instagram_content_publish`). `/igsetup login` goes back. While on the login token, the bot refreshes the Instagram and Threads tokens every 20 days by itself and saves the new one in Supabase.
 
 **Skipped schedules:** GitHub free cron skips about half of the 4-hourly runs. The listener now checks every 10 minutes and, when no full run has started for `run.catchup_hours` (4.7), starts `ingest.yml` itself (`catch_up` in `approvals.py`; needs the `actions: write` permission in `listen.yml`, already set).
+
+**Daily digest and wording check:** at 08:00 IST (first run after) one Telegram message lists yesterday's posts per platform, stories, full runs (of 6 expected), queue size and warnings (`digest` in `config.json`). Each POSTED message now has an `Image:` line saying which platforms got tailored wording or the standard text.

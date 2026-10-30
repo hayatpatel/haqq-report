@@ -142,15 +142,19 @@ def publish_draft(draft: Draft, image_url: str = "", *, dry_run: bool = True,
             if res.ok:
                 page_url = cfg["site"].get("base_url", "").rstrip("/") + res.post_id
 
+    wording = None
     if not dry_run and not draft.variants:
         from . import ai, variants
         src = template.source_name(draft.source_urls[0], cfg) if draft.source_urls else ""
         draft.variants = variants.adapt(draft, ai.generate, cfg, src)
+        wording = ", ".join(sorted(draft.variants)) or "none"
     media = cards.Media(feed_url=image_url)
     if not dry_run and not image_url and any(platform_enabled(p, cfg) for p in
                                              ("facebook", "instagram", "threads", "facebook_story", "instagram_story")):
         media = cards.build(draft, cfg, store)
         image_url = media.feed_url
+        if wording is not None:
+            media.notes.append("wording tailored for: " + wording + ("" if wording != "none" else " (standard text used)"))
         draft.photo_credit = media.credit if image_url else ""  # credit only when the photo is really in the post
 
     def fb() -> str:

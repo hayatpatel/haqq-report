@@ -73,3 +73,25 @@ def test_catch_up_starts_overdue_pipeline_once():
     assert approvals.catch_up(late, {}, now, lambda: calls.append(1)) is True
     assert approvals.catch_up(late, {}, now + timedelta(minutes=10), lambda: calls.append(1)) is False  # already requested
     assert len(calls) == 1
+
+
+def test_daily_digest_builds_and_sends_once(monkeypatch):
+    from datetime import datetime, timezone
+    from newsbot import digest
+    sent = []
+    monkeypatch.setattr(digest.owner_feed, "message", lambda t: sent.append(t))
+    class S:
+        d = {}
+        def select_raw(self, t, p):
+            if t == "posts":
+                return [{"platform": "facebook", "draft_id": 1, "drafts": {"headline": "Aid reaches Gaza"}},
+                        {"platform": "facebook_story", "draft_id": 1, "drafts": {"headline": "Aid reaches Gaza"}}]
+            if t == "run_logs": return [{"name": "run", "status": "ok"}]
+            return [{"id": 5}]
+        def get_setting(self, k, d=None): return self.d.get(k, d)
+        def set_setting(self, k, v): self.d[k] = v
+    s = S()
+    morning = datetime(2026, 10, 30, 3, 0, tzinfo=timezone.utc)  # 08:30 IST
+    assert digest.send_daily(s, {}, morning) and "Aid reaches Gaza" in sent[0] and "Full runs: 1 of 6" in sent[0]
+    assert not digest.send_daily(s, {}, morning)  # once a day
+    assert not digest.send_daily(S(), {}, datetime(2026, 10, 30, 1, 0, tzinfo=timezone.utc))  # before 08:00 IST
